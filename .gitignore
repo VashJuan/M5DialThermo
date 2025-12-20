@@ -1,0 +1,37 @@
+# Arduino IDE files
+*.hex
+*.elf
+*.bin
+*.map
+*.tmp
+
+# VS Code Arduino extension files
+.vscode/
+*.code-workspace
+
+# Build directories
+build/
+.build/
+.git/
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Backup files
+*.bak
+*.orig
+//*.old
+
+# Libraries (uncomment if you want to exclude them)
+# libraries/
+
+# Temporary files
+*~
+*.tmp
+*.temp
