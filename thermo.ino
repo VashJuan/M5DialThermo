@@ -28,7 +28,8 @@
  * - https://www.cnx-software.com/2025/07/11/m5stack-stamp-s3a-wifi-and-ble-iot-module-benefits-from-optimized-antenna-design-lower-power-consumption/
  **/
 
-#include "M5Dial.h"
+// #include <Arduino.h>
+#include <M5Dial.h>
 #include "encoder.hpp"
 #include "rtc.hpp"
 #include "temp_sensor.hpp"
@@ -42,38 +43,49 @@
  *  Red: 5 volts
  *  Black: ground
  */
-const String portA[] = {"15", "13"}; // G15 = SCL, G13 = SDA
-const String portB[] = {"1", "2"};   // G1 = SCL, G2 = SDA
+const int portA[] = {15, 13}; // G15 = SCL, G13 = SDA
+const int portB[] = {1, 2};   // G1 = SCL, G2 = SDA
 
 // per https://wiki.seeedstudio.com/Grove-Temperature_Sensor_V1.2/#hardware
 // & https://www.seeedstudio.com/Grove-Temperature-Sensor.html
-const String grove_temp_sensor_yellow = portA[1];
-const String grove_temp_sensor_white = "unconnected";
+// I2C device found at address 0x18
+const int grove_temp_sensor_yellow = portA[0]; // portA[0];
+const int grove_temp_sensor_white = portA[1]; // unconnected
+
+// if using temp without IC2 interface, set the analog pin here
+//const int grove_temp_sensor_analog = A0;
 
 /** per https://www.seeedstudio.com/Grove-LoRa-E5-STM32WLE5JC-p-4867.html,
  * https://files.seeedstudio.com/products/317990687/res/LoRa-E5%20module%20datasheet_V1.1.pdf, pg 6
  *  PB15 I/O SCL of I2C2 from MCU
  * PA15 I/O SDA of I2C2 from MCU
  */
-const String grove_wio_e5_sensor_yellow = portB[0]; // TX
-const String grove_wio_e5_sensor_white = portB[1];  // RX
+const int grove_wio_e5_sensor_yellow = portB[0]; // TX
+const int grove_wio_e5_sensor_white = portB[1];  // RX
+const int display_center_x = display_center_x;
 
 void splashScreen()
 {
-    M5Dial.Display.clear();
-    M5Dial.Display.fillScreen(0xFFB040); // Amber color
-    M5Dial.Display.setTextColor(BLACK);
-    M5Dial.Display.setTextDatum(middle_center);
-    M5Dial.Display.drawString("M5Dial Fireside Thermostat v 1.0.0", M5Dial.Display.width() / 2, M5Dial.Display.height() / 2);
+    M5.Display.clear();
+    M5.Display.fillScreen(0xFFB040); // Amber color
+    // M5.Display.setTextColor(TFT_WHITE, TFT_BLACK);
+    M5.Display.setTextColor(GREEN);
+    M5Dial.Display.setFont(&fonts::Font2); // https://github.com/lovyan03/LovyanGFX/blob/master/src/lgfx/v1/lgfx_fonts.hpp
+    //M5.Display.setTextSize(1);
+    // M5Dial.Display.setTextColor(BLACK);
+    // M5Dial.Display.setTextDatum(middle_center);
+    M5.Display.drawLine(20, 50, 220, 50, TFT_WHITE);
+    M5.Display.setCursor(20, 40);
+    M5Dial.Display.setTextDatum(middle_center); // or top_left
+ 
+    M5.Display.drawString("M5Dial Thermostat v 2.0.0", display_center_x, M5Dial.Display.height() / 2);
+       M5.Display.println("M5Dial Thermostat v 2.0.0");
+ 
+    //M5.Display.setTextSize(1);
+    // M5Dial.Display.setTextDatum(middle_center);
+    // M5Dial.Display.setTextSize(1);
 
-    M5Dial.Display.drawString(".(0,50)", 0, 50);
-    M5Dial.Display.drawString(".(50,50)", 50, 50);
-    M5Dial.Display.drawString(".(100,100)", 100, 100);
-    M5Dial.Display.drawString(".(100,200)", 100, 200);
-    M5Dial.Display.drawString(".(200,100)", 200, 100);
-    M5Dial.Display.drawString(".(200,200)", 200, 200);
-
-    delay(1000);
+    delay(700);
 }
 
 void setup()
@@ -81,20 +93,16 @@ void setup()
     Serial.begin(9600);
     auto cfg = M5.config();
     M5Dial.begin(cfg, true, false);
-    M5Dial.Display.setTextColor(GREEN);
-    M5Dial.Display.setTextDatum(middle_center);
-    M5Dial.Display.setFont(&fonts::Font4); // https://github.com/lovyan03/LovyanGFX/blob/master/src/lgfx/v1/lgfx_fonts.hpp
-    // M5Dial.Display.setTextSize(1);
 
-    splashScreen();
-
-    M5Dial.Display.setTextSize(1);
     splashScreen();
 
     encoder.setup();
     rtc.setup();
     tempSensor.setup();
+    // defaults (in hpp) to A0
     tempSensor.setSensorPin(grove_temp_sensor_yellow); // ADC1_0 (GPIO36)
+    tempSensor.setSensorPin(grove_temp_sensor_white);  // ADC1_1 (GPIO39)
+    // tempSensor.setSensorPin(grove_temp_sensor_analog); // A0
 
     Serial.println("Setup done.");
 }
@@ -137,7 +145,7 @@ void loop()
         delay(500);
         // M5Dial.Speaker.mute();
         //  M5Dial.Display.clear();
-        //  M5Dial.Display.drawString("Released", M5Dial.Display.width() / 2, M5Dial.Display.height() / 2);
+        //  M5Dial.Display.drawString("Released", display_center_x, M5Dial.Display.height() / 2);
         noteActivity();
     }
 
@@ -148,12 +156,13 @@ void loop()
     {
         Serial.println("Invalid temperature reading");
         M5Dial.Display.setTextColor(RED);
-        M5Dial.Display.drawString("Temperature Sensor Error", M5Dial.Display.width() / 2, M5Dial.Display.height() / 2 + 40);
+        M5Dial.Display.drawString("Temperature Sensor Error", display_center_x, M5Dial.Display.height() / 2 + 40);
+        M5Dial.Display.setTextColor(GREEN);
     }
     else
     {
-        M5Dial.Display.setTextColor(GREEN);
-        M5Dial.Display.drawString(String(temperature) + " °F", M5Dial.Display.width() / 2, M5Dial.Display.height() / 2 + 40);
+        //M5Dial.Display.setTextColor(GREEN);
+        M5Dial.Display.drawString(String(temperature) + " °F", display_center_x, M5Dial.Display.height() / 2 + 40);
     }
 
     //

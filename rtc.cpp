@@ -62,6 +62,7 @@ bool RTC::connectToWiFi() {
     }
 }
 
+// https://en.wikipedia.org/wiki/Network_Time_Protocol
 bool RTC::synchronizeNTP() {
     Serial.println("Synchronizing with NTP...");
     
@@ -76,7 +77,7 @@ bool RTC::synchronizeNTP() {
     }
     
     if (sntp_get_sync_status() != SNTP_SYNC_STATUS_COMPLETED) {
-        Serial.println("\r\n NTP Synchronization Failed.");
+        Serial.println("\r\n NTP Synchronization Failed (SNTP enabled).");
         return false;
     }
 #else

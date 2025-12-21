@@ -1,5 +1,5 @@
 /**
- * @file temp.hpp
+ * @file temp_sensor.hpp
  * @brief Temperature Sensor Class Header File
  * @version 1.0
  * @date 2025-12-17
@@ -15,7 +15,7 @@
 
 #pragma once
 
-// #include <m5dial.hpp>
+#include <m5dial.h>
 
 /**
  * @class TemperatureSensor
@@ -51,7 +51,9 @@ public:
      * @brief Constructor with custom pin
      * @param pin ADC pin number (default: 36 for ADC1_0)
      */
-    TemperatureSensor(int pin = 36);
+    // TemperatureSensor(int pin = 36);
+    // Grove - Temperature Sensor connect to A0
+    TemperatureSensor(int pin = 0); // A0 = 0?
 
     /**
      * @brief Destructor
