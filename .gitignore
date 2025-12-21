@@ -27,6 +27,7 @@ Thumbs.db
 *.bak
 *.orig
 //*.old
+sources/
 
 # Libraries (uncomment if you want to exclude them)
 # libraries/
