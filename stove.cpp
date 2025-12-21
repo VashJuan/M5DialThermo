@@ -14,7 +14,7 @@
 
 // https://docs.m5stack.com/en/arduino/m5unified/imu_class
 
-
+#include <M5Unified.h>
 #include "stove.hpp"
 
 // Temperature schedule adjustments throughout the day (°F)
@@ -86,10 +86,13 @@ void Stove::setRelayState(bool on)
     Serial.printf("Relay set to: %s\n", on ? "ON" : "OFF");
 }
 
-void Stove::update(TemperatureSensor& tempSensor, RTC& rtc)
+String Stove::update(TemperatureSensor& tempSensor, RTC& rtc)
 {
+    String status = "";
+
     if (!enabled) {
-        return; // Automatic control disabled
+        Serial.println("Stove: not enabled");
+        return "Stove: not enabled";
     }
     
     // Get current temperature
@@ -97,7 +100,7 @@ void Stove::update(TemperatureSensor& tempSensor, RTC& rtc)
     
     if (!tempSensor.isValidReading(currentTemp)) {
         Serial.println("Stove: Invalid temperature reading, maintaining current state");
-        return;
+        return "Stove: Invalid temperature reading";
     }
     
     // Get desired temperature for current time
@@ -114,24 +117,24 @@ void Stove::update(TemperatureSensor& tempSensor, RTC& rtc)
     
     // Hysteresis: different thresholds for turning on vs off to prevent oscillation
     if (currentState == STOVE_OFF || currentState == STOVE_PENDING_OFF) {
-        // Turn on if temperature is 2°F or more below desired
-        shouldBeOn = (tempDiff >= 2.0);
+        // Turn on if temperature is below desired
+        shouldBeOn = (tempDiff >= STOVE_HYSTERESIS_LOW);
     } else {
-        // Turn off if temperature is at or above desired (0.5°F hysteresis)
-        shouldBeOn = (tempDiff > 0.5);
+        // Turn off if temperature is at or above desired
+        shouldBeOn = (tempDiff > STOVE_HYSTERESIS_HIGH);
     }
     
     // Apply state change if needed and allowed
     if (shouldBeOn && (currentState == STOVE_OFF || currentState == STOVE_PENDING_OFF)) {
         if (canChangeState()) {
-            turnOn();
+            status = turnOn();
         } else {
             currentState = STOVE_PENDING_ON;
             Serial.println("Stove: Pending turn ON (waiting for minimum interval)");
         }
     } else if (!shouldBeOn && (currentState == STOVE_ON || currentState == STOVE_PENDING_ON)) {
         if (canChangeState()) {
-            turnOff();
+            status = turnOff();
         } else {
             currentState = STOVE_PENDING_OFF;
             Serial.println("Stove: Pending turn OFF (waiting for minimum interval)");
@@ -140,38 +143,42 @@ void Stove::update(TemperatureSensor& tempSensor, RTC& rtc)
     
     // Handle pending states
     if (currentState == STOVE_PENDING_ON && canChangeState()) {
-        turnOn();
+        status = turnOn();
     } else if (currentState == STOVE_PENDING_OFF && canChangeState()) {
-        turnOff();
+        status = turnOff();
     }
+    
+    return status;
 }
 
-void Stove::turnOn()
+String Stove::turnOn()
 {
     if (!canChangeState() && currentState != STOVE_PENDING_ON) {
         Serial.printf("Stove: Cannot turn on, %lu seconds remaining\n", 
                       getTimeUntilNextChange());
-        return;
+        return "";
     }
     
     currentState = STOVE_ON;
     lastStateChange = millis();
     setRelayState(true);
     Serial.println("Stove: Turned ON");
+    return "Stove: Turned ON";
 }
 
-void Stove::turnOff()
+String Stove::turnOff()
 {
     if (!canChangeState() && currentState != STOVE_PENDING_OFF) {
         Serial.printf("Stove: Cannot turn off, %lu seconds remaining\n", 
                       getTimeUntilNextChange());
-        return;
+        return "";
     }
     
     currentState = STOVE_OFF;
     lastStateChange = millis();
     setRelayState(false);
     Serial.println("Stove: Turned OFF");
+    return "Stove: Turned OFF";
 }
 
 StoveState Stove::getState() const
@@ -241,3 +248,5 @@ void Stove::forceState(bool on)
     lastStateChange = millis();
     setRelayState(on);
 }
+
+Stove stove;

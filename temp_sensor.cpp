@@ -41,7 +41,7 @@ bool TemperatureSensor::setup()
     
     // Initialize the sensor with the specified I2C address
     if (!mcp9808.begin(i2cAddress)) {
-        Serial.printf("Couldn't find MCP9808 at address 0x%02X! Check connections.\n", i2cAddress);
+        Serial.printf("Couldn't find MCP9808 temperature sensor at address 0x%02X! Check connections.\n", i2cAddress);
         return false;
     }
     

@@ -29,6 +29,11 @@ enum StoveState
     STOVE_PENDING_OFF = 3
 };
 
+// Turn on if temperature is 2°F or more below desired
+static const float STOVE_HYSTERESIS_LOW = 2.0;
+// Turn off if temperature is 0.5°F or more above desired
+static const float STOVE_HYSTERESIS_HIGH = 0.5;
+
 /**
  * @class Stove
  * @brief Stove control class for automated temperature management
@@ -101,7 +106,7 @@ public:
      * @param tempSensor Reference to temperature sensor
      * @param rtc Reference to RTC for time-based adjustments
      */
-    void update(TemperatureSensor &tempSensor, RTC &rtc);
+    String update(TemperatureSensor &tempSensor, RTC &rtc);
 
     /**
      * @brief Manually turn stove on
@@ -171,3 +176,6 @@ public:
      */
     void forceState(bool on);
 };
+
+// Declare a global instance of the Stove class
+extern Stove stove;

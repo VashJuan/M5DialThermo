@@ -34,7 +34,7 @@
 #include "encoder.hpp"
 #include "rtc.hpp"
 #include "temp_sensor.hpp"
-// #include "stove.hpp"
+#include "stove.hpp"
 
 /**
  * per https://docs.m5stack.com/en/core/M5Dial#pinmap:
@@ -58,30 +58,25 @@ const int portB[] = {1, 2};   // G1 = SCL, G2 = SDA
  */
 const int grove_wio_e5_sensor_yellow = portB[0]; // TX
 const int grove_wio_e5_sensor_white = portB[1];  // RX
-const int display_center_x = display_center_x;
+const int display_center_x = M5Dial.Display.width() / 2;
+const int display_center_y = M5Dial.Display.height() / 2;
+const int display_offset_y = 40; // top usable line on round display
 
 void splashScreen()
 {
+    Serial.println("\n\n------------------------------");
     M5.Display.clear();
     M5.Display.fillScreen(0xFFB040); // Amber color
     // M5.Display.setTextColor(TFT_WHITE, TFT_BLACK);
     M5.Display.setTextColor(GREEN);
     M5Dial.Display.setFont(&fonts::Font2); // https://github.com/lovyan03/LovyanGFX/blob/master/src/lgfx/v1/lgfx_fonts.hpp
-    // M5.Display.setTextSize(1);
-    //  M5Dial.Display.setTextColor(BLACK);
-    //  M5Dial.Display.setTextDatum(middle_center);
-    M5.Display.drawLine(20, 50, 220, 50, TFT_WHITE);
-    M5.Display.setCursor(20, 40);
-    M5Dial.Display.setTextDatum(middle_center); // or top_left
+    M5.Display.setTextSize(1);
+    M5Dial.Display.setTextDatum(middle_center); // of line. (or top_left)
+    M5.Display.drawString("M5Dial Thermostat v 2.0.0", display_center_x, display_center_y);
+    M5.Display.drawLine(20, display_offset_y + 10, 220, display_offset_y + 10, TFT_WHITE);
 
-    M5.Display.drawString("M5Dial Thermostat v 2.0.0", display_center_x, M5Dial.Display.height() / 2);
-    M5.Display.println("M5Dial Thermostat v 2.0.0");
-
-    // M5.Display.setTextSize(1);
-    //  M5Dial.Display.setTextDatum(middle_center);
-    //  M5Dial.Display.setTextSize(1);
-
-    delay(700);
+    // M5.Display.setCursor(20, 40);
+    //  delay(400);
 }
 
 void setup()
@@ -92,6 +87,7 @@ void setup()
 
     splashScreen();
 
+    Serial.println("Setting up encoder and RTC...");
     encoder.setup();
     rtc.setup();
 
@@ -101,19 +97,13 @@ void setup()
         Serial.println("Failed to initialize temperature sensor!");
         M5Dial.Display.clear();
         M5Dial.Display.setTextColor(RED);
-        M5Dial.Display.drawString("Temp Sensor Init Failed!", display_center_x, M5Dial.Display.height() / 2);
+        M5Dial.Display.drawString("Temp Sensor Init Failed.", display_center_x, display_center_y);
         // Don't block - continue with other setup
     }
     else
     {
         Serial.printf("Temperature sensor initialized successfully at 0x%02X\n", tempSensor.getI2CAddress());
         Serial.printf("Current resolution: %s\n", tempSensor.getResolutionString());
-
-        // Demonstrate power management capabilities
-        Serial.println("Demonstrating power management...");
-        tempSensor.shutdown();
-        delay(1000);
-        tempSensor.wakeUp();
     }
 
     Serial.println("Setup done.");
@@ -157,7 +147,7 @@ void loop()
         delay(500);
         // M5Dial.Speaker.mute();
         //  M5Dial.Display.clear();
-        //  M5Dial.Display.drawString("Released", display_center_x, M5Dial.Display.height() / 2);
+        //  M5Dial.Display.drawString("Released", display_center_x, display_center_y);
         noteActivity();
     }
 
@@ -168,21 +158,31 @@ void loop()
     {
         Serial.println("Invalid temperature reading");
         M5Dial.Display.setTextColor(RED);
-        M5Dial.Display.drawString("Temperature Sensor Error", display_center_x, M5Dial.Display.height() / 2 + 40);
+        M5Dial.Display.drawString("Temperature Sensor Error", display_center_x, display_center_y + 40);
         M5Dial.Display.setTextColor(GREEN);
     }
     else
     {
         Serial.printf("Temperature: %.2f°F (%.2f°C)\n", temperature, tempSensor.readTemperature());
         M5Dial.Display.setTextColor(GREEN);
-        M5Dial.Display.drawString(String(temperature, 1) + " °F", display_center_x, M5Dial.Display.height() / 2 + 40);
+        M5Dial.Display.drawString(String(temperature, 1) + " °F", display_center_x, display_center_y + 40);
     }
 
-    //
+    // Signal stove to turn on/off based on the current temperature
+    String stoveStatus = stove.update(tempSensor, rtc);
+    if (stoveStatus.length() > 0)
+    {
+        M5Dial.Display.drawString(stoveStatus, display_center_x, display_center_y + 60);
+    }
 
-    // To save battery power, sleep some seconds (or until buttons cause wakeup)
+    // Save battery power: sleep awhile, or until activity noted
     // https://deepwiki.com/m5stack/M5Unified/4.3-sleep-modes-and-power-off#wakeup-pin-configuration
+
+    Serial.println("sleeping...");
+    tempSensor.shutdown();
+
     M5.Power.lightSleep(((millis() - lastActivityTime > activityTimeout) ? sleepLong : sleepShort) * 1000000ULL, true);
+    tempSensor.wakeUp();
 
     // M5Dial.wakeUp();
 }
