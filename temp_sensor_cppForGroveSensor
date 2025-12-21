@@ -13,7 +13,7 @@
  * Adafruit_MCP9808: https://github.com/adafruit/Adafruit_MCP9808_Library
  */
 
-#include "M5Dial.h"
+#include "m5dial.h"
 #include "temp_sensor.hpp"
 
 TemperatureSensor::TemperatureSensor(uint8_t address, MCP9808_Resolution res) 

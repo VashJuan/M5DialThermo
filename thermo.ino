@@ -7,20 +7,21 @@
  * @date 2025-12-18
  *
  *
+/**
  * @Hardware:  M5Dial
  *               (https://m5stack.com/products/m5dial)
  *               which uses the M5StampS3 as the controller
  *               (https://shop.m5stack.com/products/m5stamp-esp32s3-module)
  *               https://docs.m5stack.com/en/arduino/m5stamps3/program
- *             + Grove - Temperature Sensor V1.2
- *               (https://www.seeedstudio.com/Grove-Temperature-Sensor.html) &
- *               (https://wiki.seeedstudio.com/Grove-Temperature_Sensor_V1.2/)
+ *             + Adafruit MCP9808 Precision I2C Temperature Sensor
+ *               (http://www.adafruit.com/products/1782)
  *             + Grove-Wio-E5 Wireless Module - STM32WLE5JC, ARM Cortex-M4 and SX126x; EU868 & US915LoRaWAN
  *               (https://www.seeedstudio.com/Grove-LoRa-E5-STM32WLE5JC-p-4867.html)
  * @Platform Version: Arduino M5Stack Board Manager v2.0.7
  * @Dependent Library:
  * M5GFX: https://github.com/m5stack/M5GFX
  * M5Unified: https://github.com/m5stack/M5Unified
+ * Adafruit_MCP9808: https://github.com/adafruit/Adafruit_MCP9808_Library
  *
  * M5StampS3A, is an update to the M5Stamp S3 ESP32-S3 module introduced in 2023 with
  * an optimized antenna design, lower power consumption, a larger user button, and
@@ -46,14 +47,9 @@
 const int portA[] = {15, 13}; // G15 = SCL, G13 = SDA
 const int portB[] = {1, 2};   // G1 = SCL, G2 = SDA
 
-// per https://wiki.seeedstudio.com/Grove-Temperature_Sensor_V1.2/#hardware
-// & https://www.seeedstudio.com/Grove-Temperature-Sensor.html
-// I2C device found at address 0x18
-const int grove_temp_sensor_yellow = portA[0]; // portA[0];
-const int grove_temp_sensor_white = portA[1]; // unconnected
-
-// if using temp without IC2 interface, set the analog pin here
-//const int grove_temp_sensor_analog = A0;
+// MCP9808 uses I2C communication
+// Default I2C address is 0x18, but can be configured to 0x18-0x1F
+// Connect to Port A (G15=SCL, G13=SDA) on M5Dial
 
 /** per https://www.seeedstudio.com/Grove-LoRa-E5-STM32WLE5JC-p-4867.html,
  * https://files.seeedstudio.com/products/317990687/res/LoRa-E5%20module%20datasheet_V1.1.pdf, pg 6
@@ -71,19 +67,19 @@ void splashScreen()
     // M5.Display.setTextColor(TFT_WHITE, TFT_BLACK);
     M5.Display.setTextColor(GREEN);
     M5Dial.Display.setFont(&fonts::Font2); // https://github.com/lovyan03/LovyanGFX/blob/master/src/lgfx/v1/lgfx_fonts.hpp
-    //M5.Display.setTextSize(1);
-    // M5Dial.Display.setTextColor(BLACK);
-    // M5Dial.Display.setTextDatum(middle_center);
+    // M5.Display.setTextSize(1);
+    //  M5Dial.Display.setTextColor(BLACK);
+    //  M5Dial.Display.setTextDatum(middle_center);
     M5.Display.drawLine(20, 50, 220, 50, TFT_WHITE);
     M5.Display.setCursor(20, 40);
     M5Dial.Display.setTextDatum(middle_center); // or top_left
- 
+
     M5.Display.drawString("M5Dial Thermostat v 2.0.0", display_center_x, M5Dial.Display.height() / 2);
-       M5.Display.println("M5Dial Thermostat v 2.0.0");
- 
-    //M5.Display.setTextSize(1);
-    // M5Dial.Display.setTextDatum(middle_center);
-    // M5Dial.Display.setTextSize(1);
+    M5.Display.println("M5Dial Thermostat v 2.0.0");
+
+    // M5.Display.setTextSize(1);
+    //  M5Dial.Display.setTextDatum(middle_center);
+    //  M5Dial.Display.setTextSize(1);
 
     delay(700);
 }
@@ -98,11 +94,27 @@ void setup()
 
     encoder.setup();
     rtc.setup();
-    tempSensor.setup();
-    // defaults (in hpp) to A0
-    tempSensor.setSensorPin(grove_temp_sensor_yellow); // ADC1_0 (GPIO36)
-    tempSensor.setSensorPin(grove_temp_sensor_white);  // ADC1_1 (GPIO39)
-    // tempSensor.setSensorPin(grove_temp_sensor_analog); // A0
+
+    // Initialize temperature sensor
+    if (!tempSensor.setup())
+    {
+        Serial.println("Failed to initialize temperature sensor!");
+        M5Dial.Display.clear();
+        M5Dial.Display.setTextColor(RED);
+        M5Dial.Display.drawString("Temp Sensor Init Failed!", display_center_x, M5Dial.Display.height() / 2);
+        // Don't block - continue with other setup
+    }
+    else
+    {
+        Serial.printf("Temperature sensor initialized successfully at 0x%02X\n", tempSensor.getI2CAddress());
+        Serial.printf("Current resolution: %s\n", tempSensor.getResolutionString());
+
+        // Demonstrate power management capabilities
+        Serial.println("Demonstrating power management...");
+        tempSensor.shutdown();
+        delay(1000);
+        tempSensor.wakeUp();
+    }
 
     Serial.println("Setup done.");
 }
@@ -161,8 +173,9 @@ void loop()
     }
     else
     {
-        //M5Dial.Display.setTextColor(GREEN);
-        M5Dial.Display.drawString(String(temperature) + " °F", display_center_x, M5Dial.Display.height() / 2 + 40);
+        Serial.printf("Temperature: %.2f°F (%.2f°C)\n", temperature, tempSensor.readTemperature());
+        M5Dial.Display.setTextColor(GREEN);
+        M5Dial.Display.drawString(String(temperature, 1) + " °F", display_center_x, M5Dial.Display.height() / 2 + 40);
     }
 
     //

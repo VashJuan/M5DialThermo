@@ -15,7 +15,7 @@
 
 #pragma once
 
-#include <M5Dial.h>
+#include <m5dial.h>
 #include <Wire.h>
 #include "Adafruit_MCP9808.h"
 
@@ -25,10 +25,10 @@
  */
 enum class MCP9808_Resolution : uint8_t
 {
-    RES_0_5C = 0,   // 0.5°C resolution, 30 ms sample time
-    RES_0_25C = 1,  // 0.25°C resolution, 65 ms sample time
-    RES_0_125C = 2, // 0.125°C resolution, 130 ms sample time
-    RES_0_0625C = 3 // 0.0625°C resolution, 250 ms sample time
+    RES_0_5C = 0,    // 0.5°C resolution, 30 ms sample time
+    RES_0_25C = 1,   // 0.25°C resolution, 65 ms sample time
+    RES_0_125C = 2,  // 0.125°C resolution, 130 ms sample time
+    RES_0_0625C = 3  // 0.0625°C resolution, 250 ms sample time
 };
 
 /**
@@ -42,10 +42,10 @@ enum class MCP9808_Resolution : uint8_t
 class TemperatureSensor
 {
 private:
-    Adafruit_MCP9808 mcp9808;      // MCP9808 sensor object
-    uint8_t i2cAddress;            // I2C address of the sensor (0x18-0x1F)
-    MCP9808_Resolution resolution; // Current resolution setting
-    bool isAwake;                  // Power state tracking
+    Adafruit_MCP9808 mcp9808;           // MCP9808 sensor object
+    uint8_t i2cAddress;                 // I2C address of the sensor (0x18-0x1F)
+    MCP9808_Resolution resolution;       // Current resolution setting
+    bool isAwake;                       // Power state tracking
 
     /**
      * @brief Convert resolution enum to resolution mode value
@@ -143,7 +143,7 @@ public:
      * @brief Get resolution as string for debugging
      * @return Resolution description string
      */
-    const char *getResolutionString() const;
+    const char* getResolutionString() const;
 };
 
 // Global instance for easy access

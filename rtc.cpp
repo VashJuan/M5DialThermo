@@ -6,10 +6,10 @@
 */
 
 #include "rtc.hpp"
+#include "secrets.h"
 
 // Default configuration constants
-static const char* DEFAULT_WIFI_SSID = "my_wifi_SSID";
-static const char* DEFAULT_WIFI_PASSWORD = "my_password";
+// WiFi credentials are now defined in secrets.h
 static const char* DEFAULT_NTP_TIMEZONE = "UTC-8";
 static const char* DEFAULT_NTP_SERVER1 = "0.pool.ntp.org";
 static const char* DEFAULT_NTP_SERVER2 = "1.pool.ntp.org";
