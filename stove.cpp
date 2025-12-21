@@ -89,6 +89,7 @@ void Stove::setRelayState(bool on)
 String Stove::update(TemperatureSensor& tempSensor, RTC& rtc)
 {
     String status = "";
+    static unsigned long loopCounter = 0;
 
     if (!enabled) {
         Serial.println("Stove: not enabled");
@@ -108,9 +109,10 @@ String Stove::update(TemperatureSensor& tempSensor, RTC& rtc)
     
     // Calculate temperature difference
     float tempDiff = desiredTemp - currentTemp;
-    
-    Serial.printf("Stove: Current=%.1f°F, Desired=%.1f°F, Diff=%.1f°F, State=%s\n", 
-                  currentTemp, desiredTemp, tempDiff, getStateString().c_str());
+    if (loopCounter++ % 100 == 0) {
+        Serial.printf("%lu) Stove: Current=%.1f°F, Desired=%.1f°F, Diff=%.1f°F, State=%s\n", 
+                      loopCounter, currentTemp, desiredTemp, tempDiff, getStateString().c_str());
+    }
     
     // Determine if state change is needed
     bool shouldBeOn = false;

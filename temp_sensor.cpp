@@ -88,7 +88,7 @@ float TemperatureSensor::readTemperatureFahrenheit()
     float temperature = mcp9808.readTempF();
     
     if (isnan(temperature)) {
-        Serial.println("Invalid temperature reading!");
+        Serial.println("Invalid temperature reading");
         return NAN;
     }
     

@@ -112,13 +112,13 @@ public:
      * @brief Manually turn stove on
      * Respects minimum change interval
      */
-    void turnOn();
+    String turnOn();
 
     /**
      * @brief Manually turn stove off
      * Respects minimum change interval
      */
-    void turnOff();
+    String turnOff();
 
     /**
      * @brief Get current stove state
