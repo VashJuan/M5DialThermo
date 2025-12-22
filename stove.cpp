@@ -17,6 +17,9 @@
 #include <M5Unified.h>
 #include "stove.hpp"
 
+// Global instance for easy access
+Stove stove;
+
 // Temperature schedule adjustments throughout the day (°F)
 // Index 0 is unused, indices 1-24 represent hours 1-24 (1 AM to Midnight)
 const float Stove::timeOffset[25] = {
@@ -251,4 +254,3 @@ void Stove::forceState(bool on)
     setRelayState(on);
 }
 
-Stove stove;

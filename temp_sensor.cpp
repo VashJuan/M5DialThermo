@@ -13,8 +13,12 @@
  * Adafruit_MCP9808: https://github.com/adafruit/Adafruit_MCP9808_Library
  */
 
-#include "M5Dial.h"
+#include <M5Dial.h>
 #include "temp_sensor.hpp"
+
+
+// Global instance for easy access (using default I2C address 0x18 and highest resolution)
+TemperatureSensor tempSensor(0x18, MCP9808_Resolution::RES_0_0625C);
 
 TemperatureSensor::TemperatureSensor(uint8_t address, MCP9808_Resolution res) 
     : i2cAddress(address), resolution(res), isAwake(false)
@@ -198,6 +202,3 @@ const char* TemperatureSensor::getResolutionString() const
             return "Unknown";
     }
 }
-
-// Global instance for easy access (using default I2C address 0x18 and highest resolution)
-TemperatureSensor tempSensor(0x18, MCP9808_Resolution::RES_0_0625C);

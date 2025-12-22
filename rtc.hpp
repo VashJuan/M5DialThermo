@@ -1,25 +1,27 @@
 /**
  * @file rtc.hpp
- * @brief Real-Time Clock Header
- * @version 1.0
- * @date 2025-12-21
+ * @brief M5Dial RTC Class Header File
+ * @version 0.2
+ * @date 2025-12-16
  *
- * WS1850S is the internal Real-Time-Clock in the M5Dial
- * https://shop.m5stack.com/products/rfid-unit-2-ws1850s
- * or uses NXP's PCF8563 RTC https://www.nxp.com/docs/en/data-sheet/PCF8563.pdf
- * https://docs.m5stack.com/en/arduino/m5unified/rtc8563_class
- *
- * This code is directly from https://docs.m5stack.com/en/arduino/m5dial/rtc
+ * @Hardwares: M5Dial
+ * @Platform Version: Arduino M5Stack Board Manager v2.0.7
+ * @Dependent Library:
+ * M5GFX: https://github.com/m5stack/M5GFX
+ * M5Unified: https://github.com/m5stack/M5Unified
  */
 
-#ifndef RTC_HPP
-#define RTC_HPP
+#pragma once
 
+// #include <Arduino.h>
+// #include <time.h>
 #include <M5Dial.h>
-#include <WiFi.h>
-#include "secrets.h"
 
-// Different versions of the framework have different SNTP header file names and availability.
+#if defined(ARDUINO)
+#include <WiFi.h>
+
+// Different versions of the framework have different SNTP header file names and
+// availability.
 #if __has_include(<esp_sntp.h>)
 #include <esp_sntp.h>
 #define SNTP_ENABLED 1
@@ -28,37 +30,146 @@
 #define SNTP_ENABLED 1
 #endif
 
+#endif
+
 #ifndef SNTP_ENABLED
 #define SNTP_ENABLED 0
 #endif
 
-// NTP Configuration
-#define NTP_TIMEZONE "UTC-8" // POSIX standard, in which "UTC+0" is UTC London, "UTC+8" is UTC+8 Seattle
-#define NTP_SERVER1 "0.pool.ntp.org"
-#define NTP_SERVER2 "1.pool.ntp.org"
-#define NTP_SERVER3 "2.pool.ntp.org"
-
-// Weekday strings
-static constexpr const char *const wd[7] = {"Sun", "Mon", "Tue", "Wed", "Thr", "Fri", "Sat"};
-
-// Forward declarations
-extern M5Dial m5Dial;
-
-// RTC class definition would go here in the future
-// For now, using M5Dial's built-in RTC functionality
-
-// Function declarations
-void setup();
-void loop();
-
-// Global RTC instance
-class RTC
+/**
+ * @struct WiFiConfig
+ * @brief WiFi configuration structure
+ */
+struct WiFiConfig
 {
-public:
-    // Placeholder for future RTC class implementation
-    // Currently using M5Dial.Rtc directly
+    const char *ssid;
+    const char *password;
 };
 
-extern RTC rtc;
+/**
+ * @struct NTPConfig
+ * @brief NTP configuration structure
+ */
+struct NTPConfig
+{
+    const char *timezone;
+    const char *server1;
+    const char *server2;
+    const char *server3;
+};
 
-#endif // RTC_HPP
+/**
+ * @class RTC
+ * @brief RTC class for M5Dial device with NTP synchronization
+ *
+ * This class provides functionality to handle RTC operations, WiFi connectivity,
+ * NTP synchronization, and time display for the M5Dial device.
+ */
+class RTC
+{
+private:
+    WiFiConfig wifiConfig;
+    NTPConfig ntpConfig;
+    bool isInitialized;
+
+    /**
+     * @brief Connect to WiFi using stored credentials
+     * @return true if connected successfully
+     */
+    bool connectToWiFi();
+
+    /**
+     * @brief Synchronize time via NTP
+     * @return true if synchronization successful
+     */
+    bool synchronizeNTP();
+
+public:
+    /**
+     * @brief Constructor with default configuration
+     */
+    RTC();
+
+    /**
+     * @brief Constructor with custom WiFi and NTP configuration
+     * @param wifi WiFi configuration
+     * @param ntp NTP configuration
+     */
+    RTC(const WiFiConfig &wifi, const NTPConfig &ntp);
+
+    /**
+     * @brief Destructor
+     */
+    ~RTC();
+
+    /**
+     * @brief Setup RTC with NTP synchronization
+     * Initializes RTC, connects to WiFi, and synchronizes time via NTP
+     * @return true if setup successful
+     */
+    bool setup();
+
+    /**
+     * @brief Update and display current time information
+     * Displays current time from RTC and ESP32 internal timer
+     */
+    void update();
+
+    /**
+     * @brief Get current time from system
+     * @return time_t Current time, or 0 if failed
+     */
+    time_t getCurrentTime();
+
+    /**
+     * @brief Get RTC date and time
+     * @return M5.RTC_DateTimeType RTC date and time structure
+     */
+    auto getRTCDateTime() -> decltype(M5Dial.Rtc.getDateTime());
+
+    /**
+     * @brief Set RTC date and time manually
+     * @param dateTime Date and time structure to set
+     */
+    void setDateTime(const m5::rtc_datetime_t &dateTime);
+
+    /**
+     * @brief Check if RTC is enabled
+     * @return true if RTC is enabled
+     */
+    bool isRTCEnabled();
+
+    /**
+     * @brief Set WiFi credentials
+     * @param ssid WiFi SSID
+     * @param password WiFi password
+     */
+    void setWiFiCredentials(const char *ssid, const char *password);
+
+    /**
+     * @brief Set NTP configuration
+     * @param timezone Timezone string
+     * @param server1 Primary NTP server
+     * @param server2 Secondary NTP server
+     * @param server3 Tertiary NTP server
+     */
+    void setNTPConfig(const char *timezone, const char *server1,
+                      const char *server2 = nullptr, const char *server3 = nullptr);
+
+    /**
+     * @brief Format time for display
+     * @param t Time structure
+     * @param includeWeekday Include weekday in format
+     * @return Formatted time string
+     */
+    String formatTime(const struct tm *t, bool includeWeekday = true);
+
+    /**
+     * @brief Check if system is initialized
+     * @return true if initialized
+     */
+    bool isSystemInitialized() const;
+};
+
+// Global instance for easy access
+extern RTC rtc;

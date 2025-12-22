@@ -1,5 +1,8 @@
 #include "encoder.hpp"
 
+// Global instance for easy access
+Encoder encoder;
+
 // Constructor
 Encoder::Encoder() : oldPosition(-999) {
     // Initialize with default position
@@ -27,6 +30,3 @@ bool Encoder::hasPositionChanged() {
     oldPosition = currentPosition;
     return true;
 }
-
-// Global instance for easy access
-Encoder encoder;

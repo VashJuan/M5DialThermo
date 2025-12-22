@@ -14,7 +14,7 @@
 #pragma once
 
 // #include <Arduino.h>
-#include "M5Dial.h"
+#include <M5Dial.h>
 
 /**
  * @class Encoder

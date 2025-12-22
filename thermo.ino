@@ -29,8 +29,10 @@
  * - https://www.cnx-software.com/2025/07/11/m5stack-stamp-s3a-wifi-and-ble-iot-module-benefits-from-optimized-antenna-design-lower-power-consumption/
  **/
 
-// #include <Arduino.h>
+// Core M5Dial include must be first
 #include <M5Dial.h>
+
+// #include <Arduino.h>
 #include "encoder.hpp"
 #include "rtc.hpp"
 #include "temp_sensor.hpp"
@@ -70,7 +72,7 @@ void splashScreen()
     M5Dial.Display.clear();
     M5Dial.Display.fillScreen(display_background_color);
     // M5Dial.Display.setTextColor(TFT_WHITE, TFT_BLACK);
-    M5.Display.setTextColor(TFT_BLACK);
+    M5Dial.Display.setTextColor(TFT_BLACK);
     M5Dial.Display.setFont(&fonts::Font2); // https://github.com/lovyan03/LovyanGFX/blob/master/src/lgfx/v1/lgfx_fonts.hpp
     M5Dial.Display.setTextSize(1);
     M5Dial.Display.setTextDatum(middle_center); // https://doc-tft-espi.readthedocs.io/tft_espi/datums/
@@ -84,8 +86,8 @@ void splashScreen()
 void setup()
 {
     Serial.begin(9600);
-    auto cfg = m5Dial.config();
-    m5Dial.begin(cfg, true, false);
+  methods  auto cfg = M5Dial.config();
+    M5Dial.begin(cfg, true, false);
 
     splashScreen();
 
@@ -97,9 +99,9 @@ void setup()
     if (!tempSensor.setup())
     {
         Serial.println("Failed to initialize temperature sensor!");
-        m5Dial.Display.clear();
-        m5Dial.Display.setTextColor(RED);
-        m5Dial.Display.drawCenterString("Temp Sensor Init Failed.", display_center_x, display_offset_y += 15);
+        M5Dial.Display.clear();
+        M5Dial.Display.setTextColor(RED);
+        M5Dial.Display.drawCenterString("Temp Sensor Init Failed.", display_center_x, display_offset_y += 15);
         // Don't block - continue with other setup
     }
     else
@@ -127,7 +129,7 @@ int loopCounter = 0;
 
 void loop()
 {
-    m5Dial.update();
+    M5Dial.update();
     // encoder.update();
     rtc.update();
 
@@ -138,19 +140,19 @@ void loop()
         noteActivity();
     }
 
-    if (m5Dial.BtnA.wasPressed())
+    if (M5Dial.BtnA.wasPressed())
     {
-        m5Dial.Speaker.tone(8000, 20);
+        M5Dial.Speaker.tone(8000, 20);
         noteActivity();
     }
 
-    if (m5Dial.BtnA.wasReleased())
+    if (M5Dial.BtnA.wasReleased())
     {
         m5Dial.Speaker.tone(12000, 20);
         delay(500);
         // m5Dial.Speaker.mute();
-        //  m5Dial.Display.clear();
-        //  m5Dial.Display.drawCenterString("Released", display_center_x, display_offset_y + 20);
+        //  M5Dial.Display.clear();
+        //  M5Dial.Display.drawCenterString("Released", display_center_x, display_offset_y + 20);
         noteActivity();
     }
 
@@ -160,8 +162,8 @@ void loop()
     if (!tempSensor.isValidReading(temperature))
     {
         Serial.println("Invalid temperature reading");
-        m5Dial.Display.setTextColor(RED);
-        m5Dial.Display.drawCenterString("Temperature Sensor Error", display_center_x, display_offset_y += 15);
+        M5Dial.Display.setTextColor(RED);
+        M5Dial.Display.drawCenterString("Temperature Sensor Error", display_center_x, display_offset_y += 15);
         m5Dial.Display.setTextColor(TFT_BLACK);
     }
     else
@@ -169,15 +171,15 @@ void loop()
         // Serial.printf("Temperature: %.2f°F\n", temperature);
         m5Dial.Display.setTextColor(TFT_BLACK);
         // clear previous temperature display
-        m5Dial.Display.fillRect(0, display_offset_y + 5, m5Dial.Display.width(), display_offset_y + 10, display_background_color);
-        m5Dial.Display.drawCenterString(String(temperature, 1) + " F", display_center_x, display_offset_y); // '°' isn't available; overwrite previous values
+        M5Dial.Display.fillRect(0, display_offset_y + 5, M5Dial.Display.width(), display_offset_y + 10, display_background_color);
+        M5Dial.Display.drawCenterString(String(temperature, 1) + " F", display_center_x, display_offset_y); // '°' isn't available; overwrite previous values
     }
 
     // Signal stove to turn on/off based on the current temperature
     String stoveStatus = stove.update(tempSensor, rtc);
     if (stoveStatus.length() > 0)
     {
-        m5Dial.Display.drawCenterString(stoveStatus, display_center_x, display_offset_y += 15);
+        M5Dial.Display.drawCenterString(stoveStatus, display_center_x, display_offset_y += 15);
     }
 
     // Save battery power: sleep awhile, or until activity noted
@@ -186,6 +188,8 @@ void loop()
     {
         Serial.println(loopCounter + ") Sleeping for " + String((millis() - lastActivityTime > activityTimeout) ? sleepLong : sleepShort) + " seconds...");
     }
+
+    delay(2000);
     // tempSensor.shutdown();
 
     // M5.Power.lightSleep(((millis() - lastActivityTime > activityTimeout) ? sleepLong : sleepShort) * 1000000ULL, true);
@@ -193,6 +197,3 @@ void loop()
 
     // m5Dial.wakeUp();
 }
-
-// Declare the external M5Dial object
-extern M5Dial m5Dial;
