@@ -86,7 +86,7 @@ void splashScreen()
 void setup()
 {
     Serial.begin(9600);
-  methods  auto cfg = M5Dial.config();
+    auto cfg = M5.config();
     M5Dial.begin(cfg, true, false);
 
     splashScreen();
@@ -148,9 +148,9 @@ void loop()
 
     if (M5Dial.BtnA.wasReleased())
     {
-        m5Dial.Speaker.tone(12000, 20);
+        M5Dial.Speaker.tone(12000, 20);
         delay(500);
-        // m5Dial.Speaker.mute();
+        // M5Dial.Speaker.mute();
         //  M5Dial.Display.clear();
         //  M5Dial.Display.drawCenterString("Released", display_center_x, display_offset_y + 20);
         noteActivity();
@@ -164,12 +164,12 @@ void loop()
         Serial.println("Invalid temperature reading");
         M5Dial.Display.setTextColor(RED);
         M5Dial.Display.drawCenterString("Temperature Sensor Error", display_center_x, display_offset_y += 15);
-        m5Dial.Display.setTextColor(TFT_BLACK);
+        M5Dial.Display.setTextColor(TFT_BLACK);
     }
     else
     {
         // Serial.printf("Temperature: %.2f°F\n", temperature);
-        m5Dial.Display.setTextColor(TFT_BLACK);
+        M5Dial.Display.setTextColor(TFT_BLACK);
         // clear previous temperature display
         M5Dial.Display.fillRect(0, display_offset_y + 5, M5Dial.Display.width(), display_offset_y + 10, display_background_color);
         M5Dial.Display.drawCenterString(String(temperature, 1) + " F", display_center_x, display_offset_y); // '°' isn't available; overwrite previous values
@@ -195,5 +195,5 @@ void loop()
     // M5.Power.lightSleep(((millis() - lastActivityTime > activityTimeout) ? sleepLong : sleepShort) * 1000000ULL, true);
     // tempSensor.wakeUp();
 
-    // m5Dial.wakeUp();
+    // M5Dial.wakeUp();
 }

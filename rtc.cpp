@@ -6,6 +6,7 @@
  */
 
 #include "rtc.hpp"
+#include "secrets.h"
 
 // Global instance for easy access
 RTC rtc;
@@ -43,11 +44,10 @@ RTC::~RTC() {
 
 bool RTC::connectToWiFi() {
     Serial.println("Connecting to WiFi...");
-    Serial.println("WiFi:");
     
     WiFi.begin(wifiConfig.ssid, wifiConfig.password);
     int attempts = 0;
-    while (WiFi.status() != WL_CONNECTED && attempts < 50) {
+    while (WiFi.status() != WL_CONNECTED && attempts < 500) {
         Serial.print('.');
         delay(500);
         attempts++;
@@ -55,11 +55,9 @@ bool RTC::connectToWiFi() {
     
     if (WiFi.status() == WL_CONNECTED) {
         Serial.println("\r\n WiFi Connected.");
-        Serial.println("Connected.");
         return true;
     } else {
         Serial.println("\r\n WiFi Connection Failed.");
-        Serial.println("Failed.");
         return false;
     }
 }
@@ -72,7 +70,7 @@ bool RTC::synchronizeNTP() {
 
 #if SNTP_ENABLED
     int attempts = 0;
-    while (sntp_get_sync_status() != SNTP_SYNC_STATUS_COMPLETED && attempts < 300) {
+    while (sntp_get_sync_status() != SNTP_SYNC_STATUS_COMPLETED && attempts < 1000) {
         Serial.print('.');
         delay(1000);
         attempts++;
