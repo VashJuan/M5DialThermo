@@ -124,8 +124,9 @@ void noteActivity()
 }
 
 int sleepShort = 1; // 1 second
-int sleepLong = 4;  // sleep-in if no recent activity
+int sleepLong = 10; // sleep-in if no recent activity
 int loopCounter = 0;
+// bool touch_wakeup = true; // Whether to enable touch screen wake-up
 
 void loop()
 {
@@ -171,7 +172,7 @@ void loop()
         // Serial.printf("Temperature: %.2f°F\n", temperature);
         M5Dial.Display.setTextColor(TFT_BLACK);
         // clear previous temperature display
-        M5Dial.Display.fillRect(0, display_offset_y + 5, M5Dial.Display.width(), display_offset_y + 10, display_background_color);
+        M5Dial.Display.fillRect(0, display_offset_y + 3, M5Dial.Display.width(), display_offset_y + 10, display_background_color);
         M5Dial.Display.drawCenterString(String(temperature, 1) + " F", display_center_x, display_offset_y); // '°' isn't available; overwrite previous values
     }
 
@@ -184,16 +185,15 @@ void loop()
 
     // Save battery power: sleep awhile, or until activity noted
     // https://deepwiki.com/m5stack/M5Unified/4.3-sleep-modes-and-power-off#wakeup-pin-configuration
-    if (loopCounter++ % 100 == 0)
+    // https://docs.m5stack.com/en/arduino/m5unified/power_class#lightsleep
+    if (loopCounter++ % 2 == 0)
     {
         Serial.println(loopCounter + ") Sleeping for " + String((millis() - lastActivityTime > activityTimeout) ? sleepLong : sleepShort) + " seconds...");
     }
 
-    delay(2000);
-    // tempSensor.shutdown();
-
-    // M5.Power.lightSleep(((millis() - lastActivityTime > activityTimeout) ? sleepLong : sleepShort) * 1000000ULL, true);
-    // tempSensor.wakeUp();
-
-    // M5Dial.wakeUp();
+    tempSensor.shutdown();
+    delay(((millis() - lastActivityTime > activityTimeout) ? sleepLong : sleepShort) * 1000);
+    // This blacks out the display, so not what we want...
+    // M5.Power.lightSleep(((millis() - lastActivityTime > activityTimeout) ? sleepLong : sleepShort) * 1000000ULL, touch_wakeup);
+    tempSensor.wakeUp();
 }
