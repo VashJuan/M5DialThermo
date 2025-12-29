@@ -37,6 +37,8 @@
 #include "rtc.hpp"
 #include "temp_sensor.hpp"
 #include "stove.hpp"
+#include "display.hpp"
+#include "display.hpp"
 
 /**
  * per https://docs.m5stack.com/en/core/M5Dial#pinmap:
@@ -50,55 +52,11 @@ const int portA[] = {15, 13}; // G15 = SCL, G13 = SDA
 const int portB[] = {1, 2};   // G1 = SCL, G2 = SDA
 
 // MCP9808 uses I2C communication
-// Default I2C address is 0x18, but can be configured to 0x18-0x1F
-// Connect to Port A (G15=SCL, G13=SDA) on M5Dial
-
-/** per https://www.seeedstudio.com/Grove-LoRa-E5-STM32WLE5JC-p-4867.html,
- * https://files.seeedstudio.com/products/317990687/res/LoRa-E5%20module%20datasheet_V1.1.pdf, pg 6
- *  PB15 I/O SCL of I2C2 from MCU
- * PA15 I/O SDA of I2C2 from MCU
- */
-const int grove_wio_e5_sensor_yellow = portB[0]; // TX
-const int grove_wio_e5_sensor_white = portB[1];  // RX
-
-const int display_center_x = (M5Dial.Display.width() == 0 ? 240 : M5Dial.Display.width()) / 2;
-const int display_center_y = (M5Dial.Display.height() == 0 ? 240 : M5Dial.Display.height()) / 2;
-
-int display_offset_y = 40; // start at top usable line on round display
-int title_y = display_offset_y;
-int time_y = display_offset_y + 20;
-int temp_y = display_offset_y + 30;
-int stove_y = display_offset_y + 40;
-int status_y = display_offset_y + 50;
-
-const uint32_t display_background_color = 0xFFB040;
-
-void splashScreen()
-{
-    Serial.println("\n\n------------------------------");
-    M5Dial.Display.clear();
-    M5Dial.Display.fillScreen(display_background_color);
-    // M5Dial.Display.setTextColor(TFT_WHITE, TFT_BLACK);
-    M5Dial.Display.setTextColor(TFT_BLACK);
-    M5Dial.Display.setFont(&fonts::Font2); // https://github.com/lovyan03/LovyanGFX/blob/master/src/lgfx/v1/lgfx_fonts.hpp
-    M5Dial.Display.setTextSize(1);
-    M5Dial.Display.setTextDatum(middle_center); // https://doc-tft-espi.readthedocs.io/tft_espi/datums/
-    M5Dial.Display.drawCenterString("M5Dial Thermostat v 2.0.0", display_center_x, title_y);
-    M5Dial.Display.drawLine(20, title_y + 15, 220, title_y + 15, TFT_BLUE);
-
-    // M5Dial.Display.setCursor(20, 40);
-    delay(50);
-}
 
 int updateTime()
 {
     rtc.update();
-
-    // clear previous time display
-    M5Dial.Display.fillRect(0, time_y - 2, M5Dial.Display.width(), time_y + 1, 0xBED500);
-
-    M5Dial.Display.drawCenterString(rtc.getFormattedTime(), display_center_x, time_y);
-
+    display.showText(TIME, rtc.getFormattedTime());
     return rtc.getDayOfWeek() * 24 + rtc.getHour(); // hour of the week
 }
 
@@ -110,21 +68,12 @@ float updateTemperature()
     if (!tempSensor.isValidReading(temperature))
     {
         Serial.println("Invalid temperature reading");
-        M5Dial.Display.setTextColor(RED);
-        M5Dial.Display.drawCenterString("Temperature Sensor Error", display_center_x, status_y);
-        M5Dial.Display.setTextColor(TFT_BLACK);
+        display.showText(STATUS, "Temperature Sensor Error", COLOR_RED);
         return 999.0;
     }
 
     // Serial.printf("Temperature: %.2f°F\n", temperature);
-    M5Dial.Display.setTextColor(TFT_BLACK);
-
-    // clear previous temperature display
-    M5Dial.Display.fillRect(0, temp_y + 3, M5Dial.Display.width(), temp_y + 1, display_background_color); //+10
-
-    M5Dial.Display.setTextSize(2);
-    M5Dial.Display.drawCenterString(String(temperature, 1) + " F", display_center_x, temp_y); // (° = U+00B0 = Alt+0176 = Degree Sign) isn't available; overwrite previous values
-    M5Dial.Display.setTextSize(1);
+    display.showText(TEMP, String(temperature, 1) + " F");
 
     return temperature;
 }
@@ -136,9 +85,7 @@ bool updateStove(float temperature, int hourOfWeek)
     if (stoveStatus.length() > 0)
     {
         Serial.println("Stove status: " + stoveStatus);
-        // clear previous stove status display
-        M5Dial.Display.fillRect(0, stove_y, M5Dial.Display.width(), stove_y + 15, display_background_color);
-        M5Dial.Display.drawCenterString("Stove: " + stoveStatus, display_center_x, stove_y += 15);
+        display.showText(STOVE, "Stove: " + stoveStatus);
     }
     return stoveStatus == "ON";
 }
@@ -149,22 +96,18 @@ void setup()
     auto cfg = M5.config();
     M5Dial.begin(cfg, true, false);
 
-    display_center_x = M5Dial.Display.width() / 2;
-    display_center_y = M5Dial.Display.height() / 2;
-
-    splashScreen();
+    display.setup();
+    display.showSplashScreen();
 
     Serial.print("Setting up encoder...");
-    M5Dial.Display.drawCenterString("Setting up (encoder) dial...", display_center_x, time_y);
+    display.showText(TIME, "Setting up (encoder) dial...");
     delay(500);
     encoder.setup();
 
     Serial.println(" and RTC...");
-    Serial.println("=========Display width returns: " + M5Dial.Display.width());
+    Serial.println("=========Display width returns: " + String(display.getWidth()));
 
-    // clear previous display
-    M5Dial.Display.fillRect(0, time_y - 2, M5Dial.Display.width(), time_y + 1, 0xBED500);
-    M5Dial.Display.drawCenterString("Setting up real time clock...", display_center_x, time_y);
+    display.showText(TIME, "Setting up real time clock...");
     delay(500);
     rtc.setup();
 
@@ -172,9 +115,7 @@ void setup()
     if (!tempSensor.setup())
     {
         Serial.println("Failed to initialize temperature sensor!");
-        M5Dial.Display.clear();
-        M5Dial.Display.setTextColor(RED);
-        M5Dial.Display.drawCenterString("Temp Sensor Init Failed.", display_center_x, time_y += 15);
+        display.showText(STATUS, "Temp Sensor Init Failed.", COLOR_RED);
         // Don't block - continue with other setup
     }
     else
@@ -185,9 +126,7 @@ void setup()
 
     String now = rtc.getFormattedTime();
     Serial.println("Setup done at " + now);
-    // M5Dial.Display.setTextSize(2);
-    M5Dial.Display.drawCenterString(now, display_center_x, time_y);
-    display_offset_y += 20;
+    display.showText(TIME, now);
 }
 
 static uint32_t lastActivityTime = millis();
@@ -264,9 +203,6 @@ void loop()
     {
         M5Dial.Speaker.tone(12000, 20);
         delay(500);
-        // M5Dial.Speaker.mute();
-        //  M5Dial.Display.clear();
-        //  M5Dial.Display.drawCenterString("Released", display_center_x, status_y + 20);
         noteActivity();
     }
 
@@ -275,28 +211,25 @@ void loop()
     // Display stove status including manual override
     if (manualStoveOverride)
     {
-        M5Dial.Display.drawCenterString("Stove: MANUAL ON", display_center_x, stove_y);
+        display.showText(STOVE, "Stove: MANUAL ON");
     }
     else if (stoveOn)
     {
-        M5Dial.Display.drawCenterString("Stove: AUTO ON", display_center_x, stove_y);
+        display.showText(STOVE, "Stove: AUTO ON");
     }
     else
     {
-        M5Dial.Display.drawCenterString("Stove: OFF", display_center_x, stove_y);
-    }
+        display.showText(STOVE, "Stove: OFF");
+        // https://deepwiki.com/m5stack/M5Unified/4.3-sleep-modes-and-power-off#wakeup-pin-configuration
+        // https://docs.m5stack.com/en/arduino/m5unified/power_class#lightsleep
+        // if (!(loopCounter++ % 10))
+        {
+            Serial.println(String(loopCounter) + ") Sleeping for " + String((millis() - lastActivityTime > activityTimeout) ? sleepLong : sleepShort) + " seconds...");
+        }
 
-    // Save battery power: sleep awhile, or until activity noted
-    // https://deepwiki.com/m5stack/M5Unified/4.3-sleep-modes-and-power-off#wakeup-pin-configuration
-    // https://docs.m5stack.com/en/arduino/m5unified/power_class#lightsleep
-    // if (!(loopCounter++ % 10))
-    {
-        Serial.println(String(loopCounter) + ") Sleeping for " + String((millis() - lastActivityTime > activityTimeout) ? sleepLong : sleepShort) + " seconds...");
+        tempSensor.shutdown();
+        delay(((millis() - lastActivityTime > activityTimeout) ? sleepLong : sleepShort) * 1000);
+        // This blacks out the display, so not what we want...
+        // M5.Power.lightSleep(((millis() - lastActivityTime > activityTimeout) ? sleepLong : sleepShort) * 1000000ULL, touch_wakeup);
+        tempSensor.wakeUp();
     }
-
-    tempSensor.shutdown();
-    delay(((millis() - lastActivityTime > activityTimeout) ? sleepLong : sleepShort) * 1000);
-    // This blacks out the display, so not what we want...
-    // M5.Power.lightSleep(((millis() - lastActivityTime > activityTimeout) ? sleepLong : sleepShort) * 1000000ULL, touch_wakeup);
-    tempSensor.wakeUp();
-}
