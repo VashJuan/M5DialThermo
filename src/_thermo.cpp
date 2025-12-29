@@ -137,7 +137,10 @@ bool updateStove(float temperature, int hourOfWeek, bool manualToggleRequested =
     }
     else
     {
-        // Get current status - use actual state instead of simplified status
+        // Run automatic temperature control logic
+        String updateResult = stove.update(temperature, hourOfWeek);
+        
+        // Get current status for display
         statusText = "Stove: " + stove.getStateString();
     }
 
