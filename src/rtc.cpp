@@ -65,20 +65,25 @@ bool RTC::connectToWiFi() {
     Serial.printf("Connecting to SSID: %s\n", wifiConfig.ssid);
     WiFi.begin(wifiConfig.ssid, wifiConfig.password);
     
-    // Reduced timeout to respect watchdog timer (15 seconds max)
-    int maxAttempts = 60; // 60 * 250ms = 15 seconds
+    // Reduced timeout to respect watchdog timer (10 seconds max)
+    int maxAttempts = 40; // 40 * 250ms = 10 seconds
     unsigned long startTime = millis();
     
     while (WiFi.status() != WL_CONNECTED && maxAttempts > 0) {
         Serial.print('.');
-        delay(250); 
+        delay(200); // Reduced delay
         yield(); // Feed watchdog
         maxAttempts--;
         
         // Additional safety check for total time
-        if (millis() - startTime > 15000) {
-            Serial.println("\nWiFi connection timeout (15s)");
+        if (millis() - startTime > 10000) {
+            Serial.println("\nWiFi connection timeout (10s)");
             break;
+        }
+        
+        // Feed watchdog more frequently
+        if (maxAttempts % 5 == 0) {
+            yield();
         }
     }
     
@@ -115,24 +120,29 @@ bool RTC::synchronizeNTP() {
     configTzTime(ntpConfig.timezone, ntpConfig.server1, ntpConfig.server2, ntpConfig.server3);
     
     // Wait for initial configuration
-    delay(1000);
-    yield();
+    delay(500); // Reduced delay
+    yield(); // Feed watchdog
 
 #if SNTP_ENABLED
     Serial.println("Using SNTP sync status method");
     unsigned long startTime = millis();
-    int maxAttempts = 40; // 40 * 250ms = 10 seconds max
+    int maxAttempts = 30; // 30 * 250ms = 7.5 seconds max
     
     while (sntp_get_sync_status() != SNTP_SYNC_STATUS_COMPLETED && maxAttempts > 0) {
         Serial.print('.');
-        delay(250);
+        delay(200); // Reduced delay
         yield(); // Feed watchdog
         maxAttempts--;
         
         // Safety timeout
-        if (millis() - startTime > 10000) {
-            Serial.println("\nSNTP timeout (10s)");
+        if (millis() - startTime > 7500) {
+            Serial.println("\nSNTP timeout (7.5s)");
             break;
+        }
+        
+        // Extra watchdog feeding
+        if (maxAttempts % 3 == 0) {
+            yield();
         }
     }
     
@@ -156,10 +166,11 @@ bool RTC::tryAlternativeNTPSync() {
     
     unsigned long startTime = millis();
     struct tm timeInfo;
-    int maxAttempts = 20; // 20 * 500ms = 10 seconds max
+    int maxAttempts = 15; // 15 * 400ms = 6 seconds max
     
     while (maxAttempts > 0) {
-        if (getLocalTime(&timeInfo, 500)) {
+        yield(); // Feed watchdog before each attempt
+        if (getLocalTime(&timeInfo, 400)) {
             // Check if we got a reasonable time (after 2020)
             if (timeInfo.tm_year + 1900 >= 2020) {
                 Serial.println("\r\nNTP Connected via getLocalTime.");
@@ -172,8 +183,8 @@ bool RTC::tryAlternativeNTPSync() {
         maxAttempts--;
         
         // Safety timeout
-        if (millis() - startTime > 10000) {
-            Serial.println("\nAlternative NTP timeout (10s)");
+        if (millis() - startTime > 6000) {
+            Serial.println("\nAlternative NTP timeout (6s)");
             break;
         }
     }
@@ -261,33 +272,43 @@ bool RTC::setup() {
     // Skip automatic timezone detection for now to avoid blocking
     Serial.println("Skipping automatic timezone detection to avoid watchdog timeout");
     Serial.println("Using configured default timezone");
+    yield(); // Feed watchdog;
     
     // Try NTP sync with robust error handling
     bool ntpSuccess = false;
     unsigned long syncStartTime = millis();
     
     try {
+        yield(); // Feed watchdog before sync
         ntpSuccess = synchronizeNTP();
+        yield(); // Feed watchdog after sync
     } catch (...) {
         Serial.println("Exception during NTP sync");
         ntpSuccess = false;
     }
     
-    // Check for overall timeout
-    if (millis() - syncStartTime > 15000) {
-        Serial.println("NTP sync overall timeout (15s)");
+    // Check for overall timeout (reduced to 10 seconds)
+    if (millis() - syncStartTime > 10000) {
+        Serial.println("NTP sync overall timeout (10s)");
         ntpSuccess = false;
     }
     
     if (!ntpSuccess) {
         Serial.println("NTP sync failed, using fallback timezone...");
         WiFi.disconnect(); // Clean up WiFi connection
-        delay(100);
+        WiFi.mode(WIFI_OFF); // Completely disable WiFi
+        yield(); // Feed watchdog instead of delay
         return setupWithFallbackTimezone();
     }
     
+    // SUCCESS: Disable WiFi after successful sync to prevent background operations
+    Serial.println("NTP sync successful - disabling WiFi to prevent background operations");
+    WiFi.disconnect();
+    WiFi.mode(WIFI_OFF);
+    yield(); // Feed watchdog
+    
     isInitialized = true;
-    Serial.println("RTC setup complete");
+    Serial.println("RTC setup complete - WiFi disabled");
     return true;
 }
 
@@ -300,8 +321,10 @@ void RTC::update() {
         return;
     }
 
+    yield(); // Feed watchdog at start
     Serial.println("\nRTC update start");
-    delay(50);
+    delay(30); // Reduced delay
+    yield(); // Feed watchdog
 
     auto dt = M5.Rtc.getDateTime();
     Serial.printf("RTC   UTC  :%04d/%02d/%02d (%s)  %02d:%02d:%02d\r\n",
@@ -313,14 +336,15 @@ void RTC::update() {
     if (dt.date.year < 2020) {
         Serial.println("Warning: RTC hardware appears to have invalid date (year < 2020)");
         Serial.println("This may indicate RTC hardware synchronization failed");
+        Serial.println("Note: Automatic resync disabled to prevent WiFi operations");
         
-        // Attempt automatic resync if ESP32 time is valid
+        // Force RTC sync from ESP32 time without WiFi
         time_t esp32Time = time(nullptr);
         if (esp32Time > 1640000000) { // Check if ESP32 time looks reasonable (after 2022)
-            Serial.println("Attempting automatic RTC resynchronization...");
             static unsigned long lastResyncAttempt = 0;
-            if (millis() - lastResyncAttempt > 30000) { // Don't spam resync attempts
+            if (millis() - lastResyncAttempt > 60000) { // Don't spam resync attempts
                 lastResyncAttempt = millis();
+                Serial.println("Attempting RTC sync from ESP32 internal time (no WiFi)");
                 forceRTCSync();
             }
         }
@@ -619,7 +643,8 @@ bool RTC::setupWithFallbackTimezone() {
     configTzTime(fallbackTimezone.c_str(), nullptr, nullptr, nullptr);
     
     // Wait a moment for timezone to take effect
-    delay(100);
+    delay(50); // Reduced delay
+    yield(); // Feed watchdog
     
     // Validate timezone configuration
     struct tm timeinfo;
@@ -634,7 +659,13 @@ bool RTC::setupWithFallbackTimezone() {
     Serial.println("Note: Time will not be synchronized with NTP servers");
     Serial.println("Manual time adjustment may be required for accuracy");
     
+    // Ensure WiFi is completely disabled to prevent background operations
+    WiFi.disconnect();
+    WiFi.mode(WIFI_OFF);
+    yield(); // Feed watchdog
+    
     isInitialized = true;
+    Serial.println("Fallback timezone setup complete - WiFi disabled");
     return true;
 }
 

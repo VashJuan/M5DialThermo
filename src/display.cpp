@@ -113,7 +113,13 @@ void Display::showText(DisplayArea area, const String& text, TextColor color, bo
     
     M5.Display.setTextColor(getColorValue(color));
     M5.Display.setTextSize(getAreaTextSize(area));
-    M5.Display.drawCenterString(text, centerX, getAreaY(area));
+
+    // if  text (for the STATUS_AREA) is too long, allow it to wrap
+    if (area == STATUS_AREA && text.length() > 20) {
+        M5.Display.drawString(text, 10, getAreaY(area));
+    } else {
+        M5.Display.drawCenterString(text, centerX, getAreaY(area));
+    }
     
     // Reset to default color and size
     M5.Display.setTextColor(TFT_BLACK);

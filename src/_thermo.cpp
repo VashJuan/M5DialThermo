@@ -31,6 +31,7 @@
 #include <Arduino.h>
 // System includes must be first
 #include <M5Unified.h>
+#include <esp_task_wdt.h>
 
 #include "encoder.hpp"
 #include "rtc.hpp"
@@ -64,25 +65,11 @@ int updateTime()
     if (formattedTime.startsWith("RTC not") || formattedTime.startsWith("Time unavailable")) {
         display.showText(TIME, "Initializing clock...", COLOR_WHITE);
         
-        // Try to re-initialize RTC if it's been failing for a while
-        static unsigned long lastRetryTime = 0;
-        static int retryCount = 0;
-        
-        if (millis() - lastRetryTime > 30000 && retryCount < 3) { // Retry every 30 seconds, max 3 times
-            lastRetryTime = millis();
-            retryCount++;
-            Serial.printf("Attempting RTC re-initialization (attempt %d/3)\\n", retryCount);
-            
-            // Try to reinitialize in background
-            if (rtc.setup()) {
-                Serial.println("RTC re-initialization successful");
-                retryCount = 0; // Reset counter on success
-            } else {
-                Serial.println("RTC re-initialization failed");
-                if (retryCount >= 3) {
-                    display.showText(STATUS_AREA, "Clock sync failed - check WiFi", COLOR_RED);
-                }
-            }
+        // Show error message but don't attempt WiFi reconnection to prevent watchdog timeout
+        static bool errorMessageShown = false;
+        if (!errorMessageShown) {
+            display.showText(STATUS_AREA, "Clock not synced - restart device", COLOR_RED);
+            errorMessageShown = true;
         }
         
         return -1; // Invalid time, return error code
@@ -153,8 +140,17 @@ bool updateStove(float temperature, int hourOfWeek, bool manualToggleRequested =
 void setup()
 {
     Serial.begin(9600);
+    
+    // Configure watchdog timer for longer timeout (ESP32-S3 compatible)
+    esp_task_wdt_init(10, true); // 10 second timeout, panic on timeout
+    esp_task_wdt_add(NULL); // Add current task to watchdog
+    
     auto cfg = M5.config();
     M5.begin(cfg);
+    
+    // Ensure WiFi is initially disabled to prevent background operations
+    WiFi.mode(WIFI_OFF);
+    yield(); // Feed watchdog
 
     display.setup();
     display.showSplashScreen();
@@ -195,8 +191,8 @@ void setup()
     stove.setup();
 
     // Clear setup message and show ready status
-    display.showText(STATUS_AREA, "System Ready", COLOR_WHITE);
-    delay(750); // Brief pause to show ready message
+    display.showText(STATUS_AREA, "System Ready", COLOR_MAGENTA);
+    delay(500); // Brief pause to show ready message
     
     String now = rtc.getFormattedTime();
     Serial.println("Setup done at " + now);
@@ -345,7 +341,7 @@ void loop()
             float desiredTemp = stove.getCurrentDesiredTemperature();
             float tempDiff = desiredTemp - curTemp;
             String statusMsg = String(desiredTemp, 1) + "°F target, diff " + String(tempDiff, 1) + "°F";
-            display.showText(STATUS_AREA, statusMsg, COLOR_WHITE);
+            display.showText(STATUS_AREA, statusMsg, COLOR_MAGENTA);
             yield(); // Feed watchdog after status display
         }
         
