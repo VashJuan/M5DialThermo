@@ -29,7 +29,7 @@ Stove::Stove(int pin, float baseTemp) :
     relayPin(pin), 
     currentState(STOVE_OFF), 
     lastStateChange(0),
-    minChangeInterval(300000), // 5 minutes in milliseconds
+    minChangeInterval(30000), // 30 seconds in milliseconds
     enabled(true),
     manualOverride(false)
 {
@@ -196,8 +196,10 @@ String Stove::update(float currentTemp, int hourOfWeek)
     
     // Calculate temperature difference
     float tempDiff = desiredTemp - currentTemp;
-    if (loopCounter++ % 100 == 0) {
-        Serial.printf("%lu) Stove: Current=%.1f°F, Desired=%.1f°F, Diff=%.1f°F, State=%s\n", 
+    
+    // Show temperature info every 10 loop iterations (more frequent)
+    if (loopCounter++ % 10 == 0) {
+        Serial.printf("%lu) Temp: Current=%.1f°F, Target=%.1f°F, Diff=%.1f°F, State=%s\n", 
                       loopCounter, currentTemp, desiredTemp, tempDiff, getStateString().c_str());
     }
     
@@ -233,6 +235,10 @@ String Stove::update(float currentTemp, int hourOfWeek)
     // Handle pending states
     if (currentState == STOVE_PENDING_ON && canChangeState()) {
         status = turnOn();
+    } else if (currentState == STOVE_PENDING_ON && !canChangeState()) {
+        // Show remaining time for pending state
+        unsigned long remainingSeconds = getTimeUntilNextChange();
+        Serial.printf("Stove: PENDING_ON, %lu seconds until ON\n", remainingSeconds);
     } else if (currentState == STOVE_PENDING_OFF && canChangeState()) {
         status = turnOff();
     }
@@ -309,7 +315,7 @@ bool Stove::isEnabled() const
     return enabled;
 }
 
-unsigned long Stove::getTimeUntilNextChange()
+unsigned long Stove::getTimeUntilNextChange() const
 {
     unsigned long elapsed = millis() - lastStateChange;
     if (elapsed >= minChangeInterval) {
@@ -323,8 +329,14 @@ String Stove::getStateString() const
     switch (currentState) {
         case STOVE_OFF:         return "OFF";
         case STOVE_ON:          return "ON";
-        case STOVE_PENDING_ON:  return "PENDING_ON";
-        case STOVE_PENDING_OFF: return "PENDING_OFF";
+        case STOVE_PENDING_ON:  {
+            unsigned long remainingSeconds = getTimeUntilNextChange();
+            return "ON in " + String(remainingSeconds) + "s";
+        }
+        case STOVE_PENDING_OFF: {
+            unsigned long remainingSeconds = getTimeUntilNextChange();
+            return "OFF in " + String(remainingSeconds) + "s";
+        }
         default:                return "UNKNOWN";
     }
 }

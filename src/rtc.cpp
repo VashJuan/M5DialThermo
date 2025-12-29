@@ -313,17 +313,29 @@ bool RTC::loadFallbackTimezone() {
     
     if (!file) {
         Serial.println("Warning: Could not open temps.csv for timezone fallback");
+        Serial.println("Available files in SPIFFS:");
+        File root = SPIFFS.open("/");
+        File foundFile = root.openNextFile();
+        while (foundFile) {
+            Serial.printf("  - %s\n", foundFile.name());
+            foundFile = root.openNextFile();
+        }
         return false;
     }
 
     Serial.println("Loading fallback timezone from temps.csv");
+    Serial.printf("File size: %d bytes\n", file.size());
     
     String line;
     bool timezoneSet = false;
+    int lineNum = 0;
     
     while (file.available() && !timezoneSet) {
         line = file.readStringUntil('\n');
         line.trim();
+        lineNum++;
+        
+        Serial.printf("Line %d: '%s'\n", lineNum, line.c_str());
         
         // Skip comments and empty lines
         if (line.length() == 0 || line.startsWith("#")) {
@@ -332,12 +344,15 @@ bool RTC::loadFallbackTimezone() {
         
         // Parse fallback timezone
         if (line.startsWith("FallbackTimezone,")) {
+            Serial.println("Found FallbackTimezone line!");
             int commaIndex = line.indexOf(',');
             if (commaIndex != -1) {
                 fallbackTimezone = line.substring(commaIndex + 1);
                 fallbackTimezone.trim();
                 timezoneSet = true;
-                Serial.printf("Loaded fallback timezone: %s\n", fallbackTimezone.c_str());
+                Serial.printf("Loaded fallback timezone: '%s'\n", fallbackTimezone.c_str());
+            } else {
+                Serial.println("Error: No comma found in FallbackTimezone line");
             }
         }
     }

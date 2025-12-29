@@ -44,7 +44,7 @@ When WiFi connection or NTP synchronization fails:
 
 Open the `temps.csv` file and locate the line:
 
-```
+```JSON
 FallbackTimezone,UTC-8
 ```
 
@@ -52,7 +52,7 @@ FallbackTimezone,UTC-8
 
 Replace `UTC-8` with your desired timezone using the standard timezone format:
 
-#### Common Timezone Examples:
+#### Common Timezone Examples
 
 - **Pacific Standard Time**: `UTC-8` (or `UTC-7` during daylight saving)
 - **Mountain Standard Time**: `UTC-7` (or `UTC-6` during daylight saving)
@@ -62,7 +62,7 @@ Replace `UTC-8` with your desired timezone using the standard timezone format:
 - **Central European Time**: `UTC+1`
 - **Japan Standard Time**: `UTC+9`
 
-#### Advanced Timezone Strings (with Daylight Saving):
+#### Advanced Timezone Strings (with Daylight Saving)
 
 - **US Pacific**: `PST8PDT,M3.2.0,M11.1.0`
 - **US Eastern**: `EST5EDT,M3.2.0,M11.1.0`
@@ -78,7 +78,8 @@ filesystem.
 1. Disconnect from WiFi or disable WiFi on your router
 2. Restart the M5Dial
 3. Check the serial output for messages like:
-   ```
+
+   ```text
    WiFi connection failed, attempting fallback timezone setup...
    Loading fallback timezone from temps.csv
    Loaded fallback timezone: UTC-8
@@ -96,14 +97,14 @@ filesystem.
 
 ## Troubleshooting
 
-### If timezone fallback doesn't work:
+### If timezone fallback doesn't work
 
 1. Verify `temps.csv` exists on the device's SPIFFS filesystem
 2. Check that the line format is exactly: `FallbackTimezone,YOUR_TIMEZONE`
 3. Ensure there are no extra spaces or special characters
 4. Monitor serial output for error messages during startup
 
-### Default Behavior:
+### Default Behavior
 
 If the fallback timezone cannot be loaded from `temps.csv`, the system will use
 `UTC-8` as the default fallback timezone.

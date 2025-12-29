@@ -162,7 +162,7 @@ public:
      * @brief Get time remaining until next state change is allowed
      * @return Seconds remaining, 0 if change is allowed now
      */
-    unsigned long getTimeUntilNextChange();
+    unsigned long getTimeUntilNextChange() const;
 
     /**
      * @brief Get string representation of current state

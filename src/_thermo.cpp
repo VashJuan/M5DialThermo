@@ -108,8 +108,8 @@ bool updateStove(float temperature, int hourOfWeek, bool manualToggleRequested =
     }
     else
     {
-        // Get current status
-        statusText = "Stove: " + stove.getStatus(temperature, hourOfWeek);
+        // Get current status - use actual state instead of simplified status
+        statusText = "Stove: " + stove.getStateString();
     }
 
     // Display status
@@ -162,9 +162,16 @@ void setup()
     yield(); // Feed watchdog
     stove.setup();
 
+    // Clear setup message and show ready status
+    display.showText(STATUS_AREA, "System Ready", COLOR_WHITE);
+    delay(500); // Brief pause to show ready message
+    
     String now = rtc.getFormattedTime();
     Serial.println("Setup done at " + now);
     display.showText(TIME, now);
+
+    // Clear status area for normal operation
+    display.showText(STATUS_AREA, "");
 
     // Setup interrupts for responsive user input
     // M5Dial button is typically on GPIO42, encoder on GPIO40/41
@@ -283,6 +290,16 @@ void loop()
     // Update stove status (handles both manual and automatic modes)
     bool stoveOn = updateStove(curTemp, hourOfWeek);
 
+    // For pending states, update display more frequently to show countdown
+    static unsigned long lastDisplayUpdate = 0;
+    if (millis() - lastDisplayUpdate > 1000) { // Update every second for countdown
+        String currentState = stove.getStateString();
+        if (currentState.startsWith("PENDING")) {
+            display.showText(STOVE, "Stove: " + currentState);
+        }
+        lastDisplayUpdate = millis();
+    }
+
     // Save battery power with display-friendly approach
     // Use CPU frequency scaling and WiFi/Temp Sensor sleep instead of deep sleep
     static bool powerSaveMode = false;
@@ -312,7 +329,7 @@ void loop()
     // Note: M5Dial doesn't have PortB, use direct GPIO control\n
     // For now, just print stove status - actual GPIO control would need specific pin setup
     if (!(loopCounter++ % 100)) {
-        Serial.println(String(loopCounter) + ") Stove control: " + (stoveOn ? "ON" : "OFF"));
+        Serial.println(String(loopCounter) + ") Stove control: " + stove.getStateString());
     }
 
     yield(); // Feed watchdog before delay

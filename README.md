@@ -73,7 +73,20 @@ comfortably in the available 8MB flash.
 1. Install the Arduino M5Stack Board Manager v2.0.7
 2. Install required libraries (see dependency list in thermo.ino)
 3. Connect the hardware components according to the Grove connector layout
-4. Upload the sketch to your M5Dial
+4. **Configure WiFi credentials** (see Security Configuration Setup below)
+5. **Upload filesystem data**: `pio run --target uploadfs` (required for
+   temps.csv and timezone fallback)
+6. **Upload firmware**: `pio run --target upload`
+
+### PlatformIO Commands
+
+- `pio run --target uploadfs` - Upload filesystem data (temps.csv, etc.) to
+  device
+- `pio run --target upload` - Upload firmware to device
+- `pio run` - Build project without uploading
+
+**Note**: The filesystem upload (`uploadfs`) must be done at least once before
+first use, and again whenever you modify `temps.csv` or other data files.
 
 ## Notes
 
