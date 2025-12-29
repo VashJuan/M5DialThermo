@@ -17,7 +17,7 @@ static const uint32_t CLEAR_COLOR = 0xBED500;
 
 Display::Display() : centerX(120), centerY(120), width(240), height(240), 
                      backgroundColor(BACKGROUND_COLOR),
-                     titleY(40), timeY(60), tempY(90), stoveY(120), statusY(150)
+                     titleY(40), timeY(60), tempY(90), stoveY(120), statusY(160)
 {
 }
 

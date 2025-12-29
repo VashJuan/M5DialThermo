@@ -43,6 +43,11 @@
 void IRAM_ATTR buttonPressISR();
 void IRAM_ATTR buttonReleaseISR();
 
+// Volatile variables for ISR communication
+volatile bool buttonPressed = false;
+volatile bool buttonReleased = false;
+volatile unsigned long buttonPressTime = 0;
+
 /**
  * per https://docs.m5stack.com/en/core/M5Dial#pinmap:
  * https://m5stack-doc.oss-cn-shenzhen.aliyuncs.com/684/S007_PinMap_01.jpg
@@ -202,75 +207,68 @@ void setup()
     // Clear status area for normal operation
     display.showText(STATUS_AREA, "");
 
-    // Disable interrupts - use polling instead to avoid watchdog timeouts
-    // Setup interrupts for responsive user input
+    // Enable interrupts for responsive user input
     // M5Dial button is typically on GPIO42, encoder on GPIO40/41
-    // attachInterrupt(digitalPinToInterrupt(42), buttonPressISR, FALLING);
-    // attachInterrupt(digitalPinToInterrupt(42), buttonReleaseISR, RISING);
+    attachInterrupt(digitalPinToInterrupt(42), buttonPressISR, FALLING);
+    attachInterrupt(digitalPinToInterrupt(42), buttonReleaseISR, RISING);
 
     // Note: M5Dial encoder interrupts may be handled internally by M5.Encoder
     // If not, you would attach to GPIO40 and GPIO41
-    Serial.println("Using polling for button input (interrupts disabled)");
+    Serial.println("Interrupt handling enabled for button input");
     
     yield(); // Feed watchdog
+}
+
+// ISR function implementations
+void IRAM_ATTR buttonPressISR() {
+    unsigned long now = millis();
+    if (now - buttonPressTime > BUTTON_DEBOUNCE_MS) {
+        buttonPressed = true;
+        buttonPressTime = now;
+    }
+}
+
+void IRAM_ATTR buttonReleaseISR() {
+    unsigned long now = millis();
+    if (now - buttonPressTime > BUTTON_DEBOUNCE_MS) {
+        buttonReleased = true;
+    }
 }
 
 static uint32_t lastActivityTime = millis();
 bool recentActivity = false;
 int activityTimeout = 3000; // 3 seconds
 
-// Polling variables for button handling (interrupts disabled)
-static bool lastButtonState = HIGH; // Assuming button is active LOW
-static unsigned long lastButtonChangeTime = 0;
+// Debounce constant for interrupts
 static const unsigned long BUTTON_DEBOUNCE_MS = 150;
 
-// Button polling functions (interrupts disabled)
-void checkButtonState() {
-    // Use M5.BtnA for button state (M5Dial's main button)
-    
-    if (M5.BtnA.wasPressed()) {
-        unsigned long currentTime = millis();
-        if (currentTime - lastButtonChangeTime > BUTTON_DEBOUNCE_MS) {
-            lastButtonChangeTime = currentTime;
-            
-            // Update activity tracking
-            recentActivity = true;
-            lastActivityTime = currentTime;
-            
-            Serial.println("Button pressed - toggling manual override");
-            yield(); // Feed watchdog
-            
-            // Toggle manual override
-            // Get current temperature for safety check
-            float curTemp = tempSensor.readTemperatureFahrenheit();
-            if (tempSensor.isValidReading(curTemp)) {
-                String result = stove.toggleManualOverride(curTemp);
-                Serial.println("Manual toggle result: " + result);
-                yield(); // Feed watchdog after operation
-            } else {
-                Serial.println("Button press ignored - invalid temperature reading");
-            }
-            yield(); // Feed watchdog
+// Button interrupt handler (replaces polling)
+void handleButtonInterrupts() {
+    // Handle button press interrupt
+    if (buttonPressed) {
+        buttonPressed = false; // Clear flag
+        recentActivity = true;
+        lastActivityTime = millis();
+        
+        Serial.println("Button pressed - toggling manual override");
+        
+        // Toggle manual override
+        float curTemp = tempSensor.readTemperatureFahrenheit();
+        if (tempSensor.isValidReading(curTemp)) {
+            String result = stove.toggleManualOverride(curTemp);
+            Serial.println("Manual toggle result: " + result);
+        } else {
+            Serial.println("Button press ignored - invalid temperature reading");
         }
-        yield(); // Feed watchdog after wasPressed check
     }
     
-    if (M5.BtnA.wasReleased()) {
-        unsigned long currentTime = millis();
-        if (currentTime - lastButtonChangeTime > BUTTON_DEBOUNCE_MS) {
-            lastButtonChangeTime = currentTime;
-            
-            // Update activity tracking  
-            recentActivity = true;
-            lastActivityTime = currentTime;
-            
-            Serial.println("Button released");
-            yield(); // Feed watchdog
-        }
-        yield(); // Feed watchdog after wasReleased check
+    // Handle button release interrupt
+    if (buttonReleased) {
+        buttonReleased = false; // Clear flag
+        recentActivity = true;
+        lastActivityTime = millis();
+        Serial.println("Button released");
     }
-    
-    yield(); // Feed watchdog at end of function
 }
 
 void noteActivity()
@@ -288,79 +286,61 @@ void loop()
 
     yield(); // Feed watchdog at start of loop
     M5.update();
-    yield(); // Feed watchdog after M5.update()
-    // encoder.update();
 
     // Read current values first so they're available for all handlers
     static int hourOfWeek = updateTime();
-    yield(); // Feed watchdog after time update
     static float curTemp = updateTemperature();
-    yield(); // Feed watchdog after temperature update
 
     // Skip stove control if time is not yet available
     if (hourOfWeek < 0) {
         Serial.println("Waiting for RTC initialization...");
-        yield(); // Feed watchdog
         delay(100); // Reduced from 1000ms
-        yield(); // Feed watchdog after delay
         return;
     }
 
-    yield(); // Feed watchdog before handlers
-
-    // Check button state using polling (interrupts disabled)
-    checkButtonState();
-    yield(); // Feed watchdog after button check
+    // Handle button interrupts (replaces polling)
+    handleButtonInterrupts();
 
     // Handle encoder changes using M5 built-in handling
     // M5.update() handles encoder internally, no additional processing needed
     
     // Update stove status (handles both manual and automatic modes)
     bool stoveOn = updateStove(curTemp, hourOfWeek);
-    yield(); // Feed watchdog after stove update
 
     // For pending states, update display more frequently to show countdown
     // Also show detailed temperature information periodically
     static unsigned long lastDisplayUpdate = 0;
     static unsigned long loopCounterForDisplay = 0;
     
-    yield(); // Feed watchdog before display check
     if (millis() - lastDisplayUpdate > 2000) { // Update every 2 seconds to reduce load
         String currentState = stove.getStateString();
         if (currentState.startsWith("PENDING")) {
             display.showText(STOVE, "Stove: " + currentState);
-            yield(); // Feed watchdog after display update
         }
         
-        yield(); // Feed watchdog before status check
         // Show detailed status every ~25 loops (reduced frequency to prevent watchdog issues)
         if (!(loopCounterForDisplay++ % 25)) {
             float desiredTemp = stove.getCurrentDesiredTemperature();
             float tempDiff = desiredTemp - curTemp;
-            String statusMsg = String(desiredTemp, 1) + "°F target, diff " + String(tempDiff, 1) + "°F";
+            String statusMsg = String(desiredTemp, 1) + "F target, diff " + String(tempDiff, 1) + "F";
             display.showText(STATUS_AREA, statusMsg, COLOR_BLUE);
-            yield(); // Feed watchdog after status display
         }
         
         lastDisplayUpdate = millis();
-        yield(); // Feed watchdog after timestamp update
     }
 
     // Save battery power with display-friendly approach
     // Use CPU frequency scaling and WiFi/Temp Sensor sleep instead of deep sleep
     static bool powerSaveMode = false;
 
-    yield(); // Feed watchdog before power management
     if (millis() - lastActivityTime > activityTimeout)
     {
         if (!powerSaveMode)
         {
             setCpuFrequencyMhz(40); // Further reduce CPU frequency when idle
-            yield(); // Feed watchdog before sensor shutdown
             tempSensor.shutdown();  // Shutdown sensor during idle periods
             powerSaveMode = true;
             Serial.println(String(loopCounter) + ") Entering power save mode (CPU 40MHz, sensor shutdown)\n");
-            yield(); // Feed watchdog after power save entry
         }
     }
     else
@@ -368,22 +348,18 @@ void loop()
         if (powerSaveMode)
         {
             setCpuFrequencyMhz(80); // Return to normal power saving frequency
-            yield(); // Feed watchdog before sensor wakeup
             tempSensor.wakeUp();    // Wake up sensor when activity resumes
             powerSaveMode = false;
             Serial.println("Exiting power save mode (CPU 80MHz, sensor active)");
-            yield(); // Feed watchdog after power save exit
         }
     }
-    yield(); // Feed watchdog after power management
 
     // Note: stove status display is handled inside updateStove()
     // Note: M5Dial doesn't have PortB, use direct GPIO control\n
     // For now, just print stove status - actual GPIO control would need specific pin setup
 
-    delay(50); // Reduced delay to prevent excessive looping while feeding watchdog more frequently
-    yield(); // Feed watchdog after delay
+    delay(50); // Reduced delay to prevent excessive looping
     
-    // Additional watchdog feeding at loop end
+    // Periodic watchdog feeding at loop end
     esp_task_wdt_reset();
 }
