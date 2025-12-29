@@ -77,7 +77,6 @@ pio device monitor
 ```
 
 Expected output:
-
 ```
 ====================================
 Thermostat Receiver Starting...
@@ -87,13 +86,22 @@ Status LED initialized on pin 9
 Stove relay initialized on pin 10 (initial state: OFF)
 Grove-Wio-E5 communication established
 Successfully joined LoRaWAN network
+Auto low power mode enabled - module will sleep automatically
+Initial signal quality: RSSI: -65, SNR: 8.5, DR: EU868 DR4 SF8 BW125K
 ====================================
 System Ready - Waiting for commands
 Safety timeout: 10 minutes
 ====================================
 ```
 
-### 2. Test Commands
+### 2. Enhanced Features
+
+**Power Management:**
+- Automatic low power mode (21µA sleep current)
+- Signal quality monitoring every 5 minutes
+- Enhanced command timing and reliability
+
+### 3. Test Commands
 
 The receiver will respond to these LoRaWAN commands:
 

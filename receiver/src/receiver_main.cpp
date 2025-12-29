@@ -100,6 +100,9 @@ void setup() {
     
     Serial.println("LoRa receiver initialized successfully");
     
+    // Enable power-saving features for battery operation
+    if (loraReceiver.setAutoLowPowerMode(true)) {\n        Serial.println(\"Auto low power mode enabled - module will sleep automatically\");\n    } else {\n        Serial.println(\"Warning: Could not enable auto low power mode\");\n    }\n    \n    // Get initial signal quality\n    String signalQuality = loraReceiver.getSignalQuality();\n    Serial.printf(\"Initial signal quality: %s\\n\", signalQuality.c_str());
+    
     // System ready
     systemInitialized = true;
     lastCommandTime = millis();
@@ -180,6 +183,14 @@ void loop() {
     
     // Update status LED
     statusLED.update();
+    
+    // Periodic signal quality monitoring (every 5 minutes)
+    static unsigned long lastSignalCheck = 0;
+    if (millis() - lastSignalCheck > 300000) { // 5 minutes
+        String signalQuality = loraReceiver.getSignalQuality();
+        Serial.printf("Signal quality update: %s\n", signalQuality.c_str());
+        lastSignalCheck = millis();
+    }
     
     // Small delay to prevent excessive CPU usage
     delay(100);

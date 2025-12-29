@@ -180,3 +180,28 @@ long-range communication between the thermostat and gas stove control.
 3. Receiver processes command and controls D10 pin
 4. Receiver sends acknowledgment back to M5Stack
 5. Safety timeout ensures stove turns OFF if communication lost
+
+## Incorporation of andresoliva/LoRa-E5 library
+
+The andresoliva/LoRa-E5 library provides significant enhancements over a basic
+AT command implementation.
+
+### 🔥 Key Enhancements
+
+1. Power Management (Major Benefit) Ultra-low power mode: 21µA sleep current
+   with automatic wake/sleep Auto mode: Module automatically enters deep sleep
+   between operations ESP32S3 compatibility: Specifically tested and optimized
+2. Enhanced Communication Reliability Better buffer management: Double-clears RX
+   buffer for more reliable commands Command timing measurements: Shows exactly
+   how long each AT command takes Improved error handling: More robust join
+   process with multiple retry attempts Flexible response parsing: Handles
+   variations in module responses better
+3. Advanced Monitoring Signal quality monitoring: Reports RSSI, SNR, and data
+   rate every 5 minutes Enhanced debugging: Better error messages and diagnostic
+   information Join process improvements: Multiple attempts with detailed
+   feedback
+4. Library Features Available Full LoRaWAN configuration: Spread factor,
+   bandwidth, transmission power Multiple messaging types: String, hex,
+   confirmed/unconfirmed packets P2P communication support: Direct
+   device-to-device communication Power consumption estimation: Calculate
+   expected battery life

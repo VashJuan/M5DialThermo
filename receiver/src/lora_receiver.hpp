@@ -83,4 +83,23 @@ public:
      * @return true if reset successful
      */
     bool reset();
+    
+    /**
+     * @brief Enter low power mode to save energy
+     * @return true if successful
+     */
+    bool enterLowPowerMode();
+    
+    /**
+     * @brief Wake up the module from low power mode
+     * @return true if successful
+     */
+    bool wakeUp();
+    
+    /**
+     * @brief Set automatic low power mode (module sleeps/wakes automatically)
+     * @param enable true to enable auto mode, false to disable
+     * @return true if successful
+     */
+    bool setAutoLowPowerMode(bool enable);
 };
