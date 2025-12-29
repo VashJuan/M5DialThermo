@@ -227,7 +227,6 @@ static const unsigned long BUTTON_DEBOUNCE_MS = 150;
 // Button polling functions (interrupts disabled)
 void checkButtonState() {
     // Use M5.BtnA for button state (M5Dial's main button)
-    static bool buttonPressed = false;
     
     if (M5.BtnA.wasPressed()) {
         unsigned long currentTime = millis();
@@ -238,9 +237,8 @@ void checkButtonState() {
             recentActivity = true;
             lastActivityTime = currentTime;
             
-            Serial.println("Button pressed (polling)");
-            M5.Speaker.tone(8000, 20);
-            yield();
+            Serial.println("Button pressed - toggling manual override");
+            yield(); // Feed watchdog
             
             // Toggle manual override
             // Get current temperature for safety check
@@ -248,10 +246,13 @@ void checkButtonState() {
             if (tempSensor.isValidReading(curTemp)) {
                 String result = stove.toggleManualOverride(curTemp);
                 Serial.println("Manual toggle result: " + result);
+                yield(); // Feed watchdog after operation
             } else {
                 Serial.println("Button press ignored - invalid temperature reading");
             }
+            yield(); // Feed watchdog
         }
+        yield(); // Feed watchdog after wasPressed check
     }
     
     if (M5.BtnA.wasReleased()) {
@@ -263,11 +264,13 @@ void checkButtonState() {
             recentActivity = true;
             lastActivityTime = currentTime;
             
-            Serial.println("Button released (polling)");
-            M5.Speaker.tone(12000, 20);
-            yield();
+            Serial.println("Button released");
+            yield(); // Feed watchdog
         }
+        yield(); // Feed watchdog after wasReleased check
     }
+    
+    yield(); // Feed watchdog at end of function
 }
 
 void noteActivity()
