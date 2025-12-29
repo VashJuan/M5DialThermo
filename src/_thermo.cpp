@@ -348,7 +348,7 @@ void loop()
         // Show detailed status with cached temperature during inactive periods
         if (!(loopCounterForDisplay++ % 25)) {
             float displayTemp = isInactive ? tempSensor.getLastTemperatureF() : curTemp;
-            if (!isnan(displayTemp)) {
+            if (!isnan(displayTemp) && tempSensor.isValidReading(displayTemp)) {
                 float desiredTemp = stove.getCurrentDesiredTemperature();
                 float tempDiff = desiredTemp - displayTemp;
                 String statusMsg = String(desiredTemp, 1) + "F target, diff " + String(tempDiff, 1) + "F";

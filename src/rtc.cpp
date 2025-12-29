@@ -269,10 +269,20 @@ bool RTC::setup() {
         return setupWithFallbackTimezone();
     }
     
-    // Skip automatic timezone detection for now to avoid blocking
-    Serial.println("Skipping automatic timezone detection to avoid watchdog timeout");
-    Serial.println("Using configured default timezone");
-    yield(); // Feed watchdog;
+    // Try automatic timezone detection with proper timeout handling
+    Serial.println("Attempting automatic timezone detection...");
+    yield(); // Feed watchdog
+    
+    bool timezoneDetected = false;
+    if (WiFi.status() == WL_CONNECTED) {
+        timezoneDetected = detectTimezoneFromLocation();
+        yield(); // Feed watchdog after detection attempt
+    }
+    
+    if (!timezoneDetected) {
+        Serial.println("Automatic timezone detection failed, using configured default timezone");
+    }
+    yield(); // Feed watchdog
     
     // Try NTP sync with robust error handling
     bool ntpSuccess = false;
@@ -815,6 +825,7 @@ bool RTC::updateFallbackTimezone(const String& newTimezone) {
 
 bool RTC::detectTimezoneFromLocation() {
     Serial.println("Attempting automatic timezone detection...");
+    yield(); // Feed watchdog before network operation
     
     if (WiFi.status() != WL_CONNECTED) {
         Serial.println("WiFi not connected for timezone detection");
@@ -825,7 +836,9 @@ bool RTC::detectTimezoneFromLocation() {
     http.begin("http://worldtimeapi.org/api/ip");
     http.setTimeout(15000); // Increased to 15 second timeout for better reliability
     
+    yield(); // Feed watchdog before HTTP request
     int httpResponseCode = http.GET();
+    yield(); // Feed watchdog after HTTP request
     
     if (httpResponseCode == 200) {
         String payload = http.getString();
