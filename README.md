@@ -66,9 +66,9 @@ comfortably in the available 8MB flash.
 - Temperature sensor uses analog interface
 - Wio-E5 uses UART/AT commands for LoRaWAN communication
 
-# Security Configuration Setup
+## Security Configuration Setup
 
-## WiFi Credentials Setup
+### WiFi Credentials Setup
 
 To protect sensitive information like WiFi credentials, this project uses a
 separate secrets file that is not committed to version control.
