@@ -1,7 +1,28 @@
 # 🌡️ M5Dial Thermo
 
-A smart thermostat project for the M5Stack Dial using precision temperature
+A smart thermostat system for the M5Stack Dial using precision temperature
 sensing and LoRaWAN communication. 🏠🔥
+
+## 📁 Project Structure
+
+This project consists of two main components:
+
+### 🎛️ **Main Thermostat** (`/src/`)
+
+- **M5Stack Dial** - Display, controls, and temperature sensing
+- **MCP9808 Temperature Sensor** - Precision temperature measurement
+- **Grove-Wio-E5** - LoRaWAN transmitter for stove control
+
+### 📡 **Receiver/Relay** (`/receiver/`)
+
+- **XIAO ESP32S3** - Relay controller
+- **Grove-Wio-E5** - LoRaWAN receiver
+- **Pin D10 Control** - Gas stove ON/OFF control (HIGH/LOW)
+
+### 🤝 **Shared Components** (`/shared/`)
+
+- **Communication Protocol** - LoRaWAN message definitions
+- **Common Utilities** - Shared code between devices
 
 ## 📝 User Notes
 
