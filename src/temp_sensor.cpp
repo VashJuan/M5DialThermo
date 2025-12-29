@@ -49,7 +49,7 @@ bool TemperatureSensor::setup()
         return false;
     }
     
-    Serial.printf("Found MCP9808 temperature sensor at address 0x%02X!\n", i2cAddress);
+    Serial.printf("\nFound MCP9808 temperature sensor at address 0x%02X!\n", i2cAddress);
     
     // Set the initial resolution
     mcp9808.setResolution(getResolutionMode(resolution));

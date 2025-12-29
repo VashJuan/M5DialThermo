@@ -160,7 +160,7 @@ bool RTC::setup() {
     
     // Try NTP sync with shorter timeout
     if (!synchronizeNTP()) {
-        Serial.println("NTP sync failed, using fallback timezone...");
+        //Serial.println("NTP sync failed, using fallback timezone...");
         WiFi.disconnect();
         return setupWithFallbackTimezone();
     }
@@ -172,8 +172,8 @@ bool RTC::setup() {
 
 void RTC::update() {
     if (!isInitialized) {
-        static unsigned long loopCounter = 0;
-        if (!(loopCounter++ % 100)) {
+        static unsigned long loopCounter = 200;
+        if ((loopCounter--) % 100) {
             Serial.println("RTC not initialized");
         }
         return;
@@ -246,10 +246,6 @@ String RTC::getFormattedTime(bool includeWeekday) {
     
     // Debug: Print timezone and raw time info
     Serial.printf("Debug: Using timezone: %s\n", currentTimezone.c_str());
-    Serial.printf("Debug: UTC time_t: %lu\n", (unsigned long)now);
-    Serial.printf("Debug: Local time from getLocalTime(): %04d/%02d/%02d %02d:%02d:%02d\n\n", 
-                  timeinfo.tm_year + 1900, timeinfo.tm_mon + 1, timeinfo.tm_mday,
-                  timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec);
     
     // Add timezone suffix to indicate what timezone we're showing
     String timeStr = formatTime(&timeinfo, includeWeekday);
@@ -409,7 +405,7 @@ bool RTC::loadFallbackTimezone() {
     }
 
     Serial.println("Loading fallback timezone from temps.csv");
-    Serial.printf("File size: %d bytes\n", file.size());
+    //Serial.printf("File size: %d bytes\n", file.size());
     
     String line;
     bool timezoneSet = false;
@@ -420,7 +416,7 @@ bool RTC::loadFallbackTimezone() {
         line.trim();
         lineNum++;
         
-        Serial.printf("Line %d: '%s'\n", lineNum, line.c_str());
+        // Serial.printf("Line %d: '%s'\n", lineNum, line.c_str());
         
         // Skip comments and empty lines
         if (line.length() == 0 || line.startsWith("#")) {
@@ -429,7 +425,7 @@ bool RTC::loadFallbackTimezone() {
         
         // Parse fallback timezone
         if (line.startsWith("FallbackTimezone,")) {
-            Serial.println("Found FallbackTimezone line!");
+            // Serial.println("Found FallbackTimezone line!");
             int commaIndex = line.indexOf(',');
             if (commaIndex != -1) {
                 fallbackTimezone = line.substring(commaIndex + 1);
@@ -581,7 +577,7 @@ bool RTC::detectTimezoneFromLocation() {
     
     HTTPClient http;
     http.begin("http://worldtimeapi.org/api/ip");
-    http.setTimeout(12000); // Increased to 12 second timeout for better reliability
+    http.setTimeout(15000); // Increased to 15 second timeout for better reliability
     
     int httpResponseCode = http.GET();
     
