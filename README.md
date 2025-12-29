@@ -10,6 +10,8 @@ communication.
 - The temperature schedule varies from -15°F (nighttime) to 0°F (daytime comfort
   periods)
 - Edit temps.csv to customize your thermostat schedule without modifying code
+- **Timezone Configuration**: When WiFi/NTP is unavailable, the system uses a
+  fallback timezone stored in temps.csv (see README_TIMEZONE.md for details)
 - If temps.csv is not found, the system uses fallback defaults (68°F base
   temperature) temps.csv
 

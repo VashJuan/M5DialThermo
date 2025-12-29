@@ -3,7 +3,6 @@
 # Edit these values to customize your thermostat schedule
 # 
 # Base Temperature: The target temperature in Fahrenheit (e.g., 68.0)
-# Fallback Timezone: Used when NTP/WiFi is not available (e.g., UTC-8, UTC-5, UTC+0)
 # Hourly Offsets: Temperature adjustments for each hour (1 AM to Midnight)
 #   - Negative values reduce temperature
 #   - Positive values increase temperature
@@ -11,9 +10,6 @@
 
 # Base temperature in Fahrenheit
 BaseTemperature,82.0
-
-# Fallback timezone for when NTP/WiFi is not available
-FallbackTimezone,UTC-8
 
 # Hour,Temperature Offset,Description
 1,-15.0,1 AM - Night/Sleep

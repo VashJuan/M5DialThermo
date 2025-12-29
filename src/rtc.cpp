@@ -7,6 +7,9 @@
 
 #include "rtc.hpp"
 #include "secrets.h"
+#include "SPIFFS.h"
+#include "HTTPClient.h"
+#include "ArduinoJson.h"
 
 // Global instance for easy access
 RTC rtc;
@@ -30,11 +33,13 @@ RTC::RTC() : isInitialized(false) {
     ntpConfig.server1 = DEFAULT_NTP_SERVER1;
     ntpConfig.server2 = DEFAULT_NTP_SERVER2;
     ntpConfig.server3 = DEFAULT_NTP_SERVER3;
+    fallbackTimezone = DEFAULT_NTP_TIMEZONE;
 }
 
 // Constructor with custom configuration
 RTC::RTC(const WiFiConfig& wifi, const NTPConfig& ntp) : 
     wifiConfig(wifi), ntpConfig(ntp), isInitialized(false) {
+    fallbackTimezone = ntp.timezone;
 }
 
 // Destructor
@@ -118,12 +123,21 @@ bool RTC::setup() {
     
     // Connect to WiFi
     if (!connectToWiFi()) {
-        return false;
+        Serial.println("WiFi connection failed, attempting fallback timezone setup...");
+        return setupWithFallbackTimezone();
+    }
+    
+    // Try to detect timezone automatically first
+    bool timezoneDetected = detectTimezoneFromLocation();
+    if (!timezoneDetected) {
+        Serial.println("Automatic timezone detection failed, using configured timezone");
     }
     
     // Synchronize with NTP
     if (!synchronizeNTP()) {
-        return false;
+        Serial.println("NTP synchronization failed, attempting fallback timezone setup...");
+        WiFi.disconnect();
+        return setupWithFallbackTimezone();
     }
     
     isInitialized = true;
@@ -158,7 +172,8 @@ void RTC::update() {
 
     {
         auto tm = localtime(&t); // for local timezone.
-        Serial.println("ESP32 " + String(ntpConfig.timezone) + ":" + formatTime(tm));
+        String currentTimezone = fallbackTimezone.length() > 0 ? fallbackTimezone : String(ntpConfig.timezone);
+        Serial.println("ESP32 " + currentTimezone + ":" + formatTime(tm));
     }
 
     Serial.println("RTC update end");
@@ -252,4 +267,232 @@ int RTC::getDayOfWeek() {
     auto dt = M5.Rtc.getDateTime();
     // Convert M5 day of week (1=Monday) to standard (0=Sunday)
     return (dt.date.weekDay == 7) ? 0 : dt.date.weekDay;
+}
+
+bool RTC::loadFallbackTimezone() {
+    // Initialize SPIFFS
+    if (!SPIFFS.begin()) {
+        Serial.println("Warning: Failed to mount SPIFFS filesystem for timezone fallback");
+        return false;
+    }
+    
+    // Try to open from SPIFFS
+    File file = SPIFFS.open("/temps.csv", "r");
+    if (!file) {
+        // Try without leading slash
+        file = SPIFFS.open("temps.csv", "r");
+    }
+    
+    if (!file) {
+        Serial.println("Warning: Could not open temps.csv for timezone fallback");
+        return false;
+    }
+
+    Serial.println("Loading fallback timezone from temps.csv");
+    
+    String line;
+    bool timezoneSet = false;
+    
+    while (file.available() && !timezoneSet) {
+        line = file.readStringUntil('\n');
+        line.trim();
+        
+        // Skip comments and empty lines
+        if (line.length() == 0 || line.startsWith("#")) {
+            continue;
+        }
+        
+        // Parse fallback timezone
+        if (line.startsWith("FallbackTimezone,")) {
+            int commaIndex = line.indexOf(',');
+            if (commaIndex != -1) {
+                fallbackTimezone = line.substring(commaIndex + 1);
+                fallbackTimezone.trim();
+                timezoneSet = true;
+                Serial.printf("Loaded fallback timezone: %s\n", fallbackTimezone.c_str());
+            }
+        }
+    }
+    
+    file.close();
+    
+    if (!timezoneSet) {
+        Serial.printf("Warning: Fallback timezone not found in CSV, using default: %s\n", DEFAULT_NTP_TIMEZONE);
+        fallbackTimezone = DEFAULT_NTP_TIMEZONE;
+    }
+    
+    return timezoneSet;
+}
+
+bool RTC::setupWithFallbackTimezone() {
+    Serial.println("Setting up RTC with fallback timezone (no NTP sync)");
+    
+    // Load fallback timezone from CSV
+    loadFallbackTimezone();
+    
+    // Configure timezone without NTP servers
+    configTzTime(fallbackTimezone.c_str(), nullptr, nullptr, nullptr);
+    
+    Serial.printf("Timezone configured to fallback: %s\n", fallbackTimezone.c_str());
+    Serial.println("Note: Time will not be synchronized with NTP servers");
+    Serial.println("Manual time adjustment may be required for accuracy");
+    
+    isInitialized = true;
+    return true;
+}
+
+String RTC::getFallbackTimezone() const {
+    return fallbackTimezone;
+}
+
+bool RTC::updateFallbackTimezone(const String& newTimezone) {
+    // Initialize SPIFFS
+    if (!SPIFFS.begin()) {
+        Serial.println("Error: Failed to mount SPIFFS filesystem for timezone update");
+        return false;
+    }
+    
+    // Read the entire file content
+    File file = SPIFFS.open("/temps.csv", "r");
+    if (!file) {
+        file = SPIFFS.open("temps.csv", "r");
+    }
+    
+    if (!file) {
+        Serial.println("Error: Could not open temps.csv for timezone update");
+        return false;
+    }
+    
+    String content = "";
+    bool timezoneUpdated = false;
+    
+    while (file.available()) {
+        String line = file.readStringUntil('\n');
+        
+        if (line.startsWith("FallbackTimezone,")) {
+            content += "FallbackTimezone," + newTimezone + "\n";
+            timezoneUpdated = true;
+        } else {
+            content += line + "\n";
+        }
+    }
+    file.close();
+    
+    // If timezone line wasn't found, add it after BaseTemperature
+    if (!timezoneUpdated) {
+        // Insert the timezone line after BaseTemperature
+        int basePos = content.indexOf("BaseTemperature,");
+        if (basePos != -1) {
+            int nextLine = content.indexOf('\n', basePos);
+            if (nextLine != -1) {
+                String newContent = content.substring(0, nextLine + 1);
+                newContent += "\n# Fallback timezone for when NTP/WiFi is not available\n";
+                newContent += "FallbackTimezone," + newTimezone + "\n";
+                newContent += content.substring(nextLine + 1);
+                content = newContent;
+                timezoneUpdated = true;
+            }
+        }
+    }
+    
+    if (!timezoneUpdated) {
+        Serial.println("Error: Could not locate appropriate position to update timezone");
+        return false;
+    }
+    
+    // Write the updated content back
+    file = SPIFFS.open("/temps.csv", "w");
+    if (!file) {
+        file = SPIFFS.open("temps.csv", "w");
+    }
+    
+    if (!file) {
+        Serial.println("Error: Could not open temps.csv for writing timezone update");
+        return false;
+    }
+    
+    file.print(content);
+    file.close();
+    
+    // Update the internal fallback timezone
+    fallbackTimezone = newTimezone;
+    
+    Serial.printf("Successfully updated fallback timezone to: %s\n", newTimezone.c_str());
+    return true;
+}
+
+bool RTC::detectTimezoneFromLocation() {
+    Serial.println("Attempting automatic timezone detection...");
+    
+    if (WiFi.status() != WL_CONNECTED) {
+        Serial.println("WiFi not connected for timezone detection");
+        return false;
+    }
+    
+    HTTPClient http;
+    http.begin("http://worldtimeapi.org/api/ip");
+    http.setTimeout(10000); // 10 second timeout
+    
+    int httpResponseCode = http.GET();
+    
+    if (httpResponseCode == 200) {
+        String payload = http.getString();
+        
+        // Parse JSON response
+        DynamicJsonDocument doc(1024);
+        DeserializationError error = deserializeJson(doc, payload);
+        
+        if (error) {
+            Serial.printf("JSON parsing failed: %s\n", error.c_str());
+            http.end();
+            return false;
+        }
+        
+        // Extract timezone from response
+        String detectedTimezone = doc["timezone"];
+        String utcOffset = doc["utc_offset"];
+        
+        if (detectedTimezone.length() > 0 && utcOffset.length() > 0) {
+            // Convert to ESP32 timezone format
+            String espTimezone = convertToESP32Timezone(utcOffset, detectedTimezone);
+            
+            if (espTimezone.length() > 0) {
+                Serial.printf("Detected timezone: %s (UTC%s)\n", detectedTimezone.c_str(), utcOffset.c_str());
+                Serial.printf("Using ESP32 timezone: %s\n", espTimezone.c_str());
+                
+                // Update the NTP configuration with detected timezone
+                ntpConfig.timezone = espTimezone.c_str();
+                
+                http.end();
+                return true;
+            }
+        }
+    } else {
+        Serial.printf("HTTP request failed: %d\n", httpResponseCode);
+    }
+    
+    http.end();
+    return false;
+}
+
+String RTC::convertToESP32Timezone(const String& utcOffset, const String& timezoneName) {
+    // Convert UTC offset (e.g., "+08:00", "-05:00") to ESP32 format (e.g., "UTC-8", "UTC+5")
+    if (utcOffset.length() < 6) {
+        return "";
+    }
+    
+    char sign = utcOffset.charAt(0);
+    int hours = utcOffset.substring(1, 3).toInt();
+    int minutes = utcOffset.substring(4, 6).toInt();
+    
+    // ESP32 timezone format uses opposite sign convention
+    String espSign = (sign == '+') ? "-" : "+";
+    
+    // Handle fractional hours (if minutes != 0)
+    if (minutes == 0) {
+        return "UTC" + espSign + String(hours);
+    } else {
+        float totalHours = hours + (minutes / 60.0);
+        return "UTC" + espSign + String(totalHours, 1);
+    }
 }

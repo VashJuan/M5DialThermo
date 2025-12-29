@@ -93,6 +93,27 @@ private:
     WiFiConfig wifiConfig;
     NTPConfig ntpConfig;
     bool isInitialized;
+    String fallbackTimezone;
+
+    /**
+     * @brief Load fallback timezone from temps.csv
+     * @return true if successfully loaded
+     */
+    bool loadFallbackTimezone();
+
+    /**
+     * @brief Detect timezone automatically using IP geolocation
+     * @return true if timezone was detected successfully
+     */
+    bool detectTimezoneFromLocation();
+
+    /**
+     * @brief Convert UTC offset and timezone name to ESP32 format
+     * @param utcOffset UTC offset string (e.g., "+08:00")
+     * @param timezoneName Timezone name for reference
+     * @return ESP32 timezone string (e.g., "UTC-8")
+     */
+    String convertToESP32Timezone(const String &utcOffset, const String &timezoneName);
 
     /**
      * @brief Connect to WiFi using stored credentials
@@ -177,6 +198,25 @@ public:
      */
     void setNTPConfig(const char *timezone, const char *server1,
                       const char *server2 = nullptr, const char *server3 = nullptr);
+
+    /**
+     * @brief Setup timezone from fallback configuration (without NTP sync)
+     * @return true if timezone was set successfully
+     */
+    bool setupWithFallbackTimezone();
+
+    /**
+     * @brief Get the current fallback timezone setting
+     * @return Current fallback timezone string
+     */
+    String getFallbackTimezone() const;
+
+    /**
+     * @brief Update the fallback timezone in temps.csv file
+     * @param newTimezone New timezone string (e.g., "UTC-8", "EST5EDT")
+     * @return true if successfully updated
+     */
+    bool updateFallbackTimezone(const String &newTimezone);
 
     /**
      * @brief Format time for display

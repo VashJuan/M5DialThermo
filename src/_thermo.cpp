@@ -142,6 +142,12 @@ void setup()
         Serial.printf("Current resolution: %s\n", tempSensor.getResolutionString());
     }
 
+    // Initialize stove control (loads configuration from temps.csv)
+    Serial.println("Setting up stove control...");
+    display.showText(STATUS_AREA, "Setting up stove control...");
+    delay(250);
+    stove.setup();
+
     String now = rtc.getFormattedTime();
     Serial.println("Setup done at " + now);
     display.showText(TIME, now);

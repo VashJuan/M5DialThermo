@@ -16,7 +16,7 @@
 
 #include <M5Unified.h>
 #include <FS.h>
-#include <SD.h>
+#include <SPIFFS.h>
 #include "stove.hpp"
 
 // Global instance for easy access
@@ -63,20 +63,24 @@ Stove::~Stove()
 
 bool Stove::loadConfigFromCSV()
 {
-    // Try to open the temps.csv file from SD card first, then from SPIFFS
+    // Try to open the temps.csv file from SPIFFS (internal flash)
     File file;
     
-    // Check if SD card is available and try to open from there
-    if (SD.begin()) {
-        file = SD.open("/temps.csv", "r");
-        if (!file) {
-            // Try from root directory
-            file = SD.open("temps.csv", "r");
-        }
+    // Initialize SPIFFS
+    if (!SPIFFS.begin()) {
+        Serial.println("Warning: Failed to mount SPIFFS filesystem");
+        return false;
+    }
+    
+    // Try to open from SPIFFS
+    file = SPIFFS.open("/temps.csv", "r");
+    if (!file) {
+        // Try without leading slash
+        file = SPIFFS.open("temps.csv", "r");
     }
     
     if (!file) {
-        Serial.println("Warning: Could not open temps.csv, using default values");
+        Serial.println("Warning: Could not open temps.csv from SPIFFS, using default values");
         return false;
     }
 
