@@ -131,6 +131,16 @@ If you get compilation errors about missing `secrets.h`:
 2. Verify the file exists in the same directory as `rtc.cpp`
 3. Check that your WiFi credentials are properly defined in `secrets.h`
 
+### Current Library Dependencies
+
+- M5Unified @ 0.1.17
+- M5GFX @ 0.1.17
+- Adafruit MCP9808 Library @ 2.0.2
+- FS @ 2.0.0
+- SD @ 2.0.0
+- WiFi @ 2.0.0
+- Wire @ 2.0.0
+
 ## Temperature Configuration
 
 ### Customizing Temperature Schedule
@@ -180,5 +190,5 @@ for details.
 
 ## Author
 
-John Cornelison (john@vashonSoftware.com)  
+John Cornelison (<john@vashonSoftware.com>)  
 Version 2.0.0 - December 2025

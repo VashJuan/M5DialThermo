@@ -9,7 +9,7 @@
 #   - Hours: 1=1AM, 2=2AM, ..., 12=Noon, 13=1PM, ..., 24=Midnight
 
 # Base temperature in Fahrenheit
-BaseTemperature,68.0
+BaseTemperature,82.0
 
 # Hour,Temperature Offset,Description
 1,-15.0,1 AM - Night/Sleep

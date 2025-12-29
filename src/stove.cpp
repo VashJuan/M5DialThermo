@@ -54,7 +54,6 @@ Stove::Stove(int pin, float baseTemp) :
         baseTemperature = 68.0;
     }
 }
-}
 
 Stove::~Stove()
 {

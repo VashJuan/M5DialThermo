@@ -29,7 +29,7 @@
  * - https://www.cnx-software.com/2025/07/11/m5stack-stamp-s3a-wifi-and-ble-iot-module-benefits-from-optimized-antenna-design-lower-power-consumption/
  **/
 #include <Arduino.h>
-// Core M5Dial include must be first
+// System includes must be first
 #include <M5Unified.h>
 
 #include "encoder.hpp"
@@ -208,7 +208,7 @@ void loop()
 {
     static const int sleepShort = 1; // 1 second
     static const int sleepLong = 3;  // sleep-in if no recent activity
-    static int loopCounter = 0;
+    static long loopCounter = 0;
     // bool touch_wakeup = true; // Whether to enable touch screen wake-up
 
     M5.update();
@@ -262,7 +262,7 @@ void loop()
             setCpuFrequencyMhz(40); // Further reduce CPU frequency when idle
             tempSensor.shutdown();  // Shutdown sensor during idle periods
             powerSaveMode = true;
-            Serial.println(String(loopCounter++) + ") Entering power save mode (CPU 40MHz, sensor shutdown)");
+            Serial.println(String(loopCounter) + ") Entering power save mode (CPU 40MHz, sensor shutdown)");
         }
     }
     else
@@ -279,7 +279,9 @@ void loop()
     // Note: stove status display is handled inside updateStove()
     // Note: M5Dial doesn't have PortB, use direct GPIO control\n
     // For now, just print stove status - actual GPIO control would need specific pin setup
-    Serial.println(String("Stove control: ") + (stoveOn ? "ON" : "OFF"));
+    if (!(loopCounter++ % 100)) {
+        Serial.println(String(loopCounter) + ") Stove control: " + (stoveOn ? "ON" : "OFF"));
+    }
 
     delay(100); // Short delay to prevent excessive looping, interrupts still responsive
 }
