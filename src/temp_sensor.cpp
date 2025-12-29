@@ -176,7 +176,7 @@ void TemperatureSensor::wakeUp()
 {
     mcp9808.wake();
     isAwake = true;
-    Serial.println("MCP9808 sensor woken up - ready to read!");
+    Serial.println("\nMCP9808 sensor woken up - ready to read!");
 }
 
 void TemperatureSensor::shutdown()

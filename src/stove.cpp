@@ -189,7 +189,7 @@ String Stove::update(float currentTemp, int hourOfWeek)
 
     // If manual override is active, don't run automatic control
     if (manualOverride) {
-        if (!(loopCounter % 100)) {
+        if (!(loopCounter % 500)) {
             Serial.println("DEBUG: Manual override active, skipping automatic control");
         }
         return (currentState == STOVE_ON) ? "ON" : "OFF";

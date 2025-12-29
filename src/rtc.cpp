@@ -354,7 +354,7 @@ void RTC::update() {
     auto t = time(nullptr);
     {
         auto tm = gmtime(&t); // for UTC.
-        Serial.println("ESP32 UTC  :" + formatTime(tm));
+        Serial.println("ESP32 UTC  :" + formatDate(tm));
     }
 
     {
@@ -381,13 +381,13 @@ void RTC::update() {
             displayTimezone = "CST";
         }
         
-        Serial.println("ESP32 Local " + displayTimezone + ":" + formatTime(tm));
+        Serial.println("ESP32 Local " + displayTimezone + ":" + formatDate(tm));
     }
 
     Serial.println("RTC update end\n");
 }
 
-String RTC::getFormattedTime(bool includeWeekday) {
+String RTC::getFormattedDate(bool includeWeekday) {
     if (!isInitialized) {
         return "RTC not initialized";
     }
@@ -414,9 +414,38 @@ String RTC::getFormattedTime(bool includeWeekday) {
     // Serial.printf("Debug: Using timezone: %s\n", currentTimezone.c_str());
     
     // Return properly formatted local time without confusing timezone suffix
-    String timeStr = formatTime(&timeinfo, includeWeekday);
+    String timeStr = formatDate(&timeinfo, includeWeekday);
     return timeStr;
 }
+
+String RTC::getFormattedTime() {
+    if (!isInitialized) {
+        return "RTC not initialized";
+    }
+    
+    // Ensure timezone is configured
+    String currentTimezone = getCurrentTimezone();
+    if (currentTimezone.length() == 0) {
+        Serial.println("Warning: No timezone configured, using UTC");
+        return "Time unavailable (no timezone)";
+    }
+    
+    time_t now = getCurrentTime();
+    if (now == 0) {
+        return "Time unavailable";
+    }
+    
+    struct tm timeinfo;
+    if (!getLocalTime(&timeinfo)) {
+        Serial.printf("Warning: getLocalTime() failed with timezone: %s\n", currentTimezone.c_str());
+        return "Time unavailable";
+    }
+    
+    // Return properly formatted local time without confusing timezone suffix
+    String timeStr = formatTime(&timeinfo);
+    return timeStr;
+}
+
 
 time_t RTC::getCurrentTime() {
     time_t now;
@@ -450,7 +479,7 @@ void RTC::setNTPConfig(const char* timezone, const char* server1,
     ntpConfig.server3 = server3;
 }
 
-String RTC::formatTime(const struct tm* t, bool includeWeekday) {
+String RTC::formatDate(const struct tm* t, bool includeWeekday) {
     struct tm timeinfo;
     const struct tm* timePtr;
 
@@ -478,6 +507,33 @@ String RTC::formatTime(const struct tm* t, bool includeWeekday) {
                 String(timePtr->tm_mon + 1) + "/" + 
                 String(timePtr->tm_mday) + " " +
                 String(hour12) + ":" + 
+                String(timePtr->tm_min < 10 ? "0" : "") + String(timePtr->tm_min) + ":" + 
+                String(timePtr->tm_sec < 10 ? "0" : "") + String(timePtr->tm_sec) + " " +
+                ampm;
+    return formatted;
+}
+
+String RTC::formatTime(const struct tm* t) {
+    struct tm timeinfo;
+    const struct tm* timePtr;
+    timePtr = t;
+    
+    // Convert 24-hour to 12-hour format with AM/PM
+    int hour12 = timePtr->tm_hour;
+    String ampm = "AM";
+    
+    if (hour12 == 0) {
+        hour12 = 12; // Midnight is 12 AM
+    } else if (hour12 == 12) {
+        ampm = "PM"; // Noon is 12 PM
+    } else if (hour12 > 12) {
+        hour12 -= 12; // Convert PM hours
+        ampm = "PM";
+    }
+    // Hours 1-11 remain the same with AM
+    
+    String formatted;
+    formatted = String(hour12) + ":" + 
                 String(timePtr->tm_min < 10 ? "0" : "") + String(timePtr->tm_min) + ":" + 
                 String(timePtr->tm_sec < 10 ? "0" : "") + String(timePtr->tm_sec) + " " +
                 ampm;
@@ -651,7 +707,7 @@ bool RTC::setupWithFallbackTimezone() {
     time_t testTime = time(nullptr);
     if (getLocalTime(&timeinfo)) {
         Serial.printf("Timezone configured successfully: %s\n", fallbackTimezone.c_str());
-        Serial.printf("Local time: %s\n", formatTime(&timeinfo).c_str());
+        Serial.printf("Local time: %s\n", formatDate(&timeinfo).c_str());
     } else {
         Serial.printf("Warning: Timezone configuration may have failed: %s\n", fallbackTimezone.c_str());
     }

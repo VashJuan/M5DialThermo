@@ -13,7 +13,7 @@ sensing and LoRaWAN communication. 🏠🔥
 - 🌍 **Timezone Configuration**: When WiFi/NTP is unavailable, the system uses a
   fallback timezone stored in temps.csv (see README_TIMEZONE.md for details)
 - ⚠️ If temps.csv is not found, the system uses fallback defaults (68°F base
-  temperature) temps.csv
+  temperature) from temps.csv
 
 ## 🔧 Hardware
 
@@ -28,7 +28,16 @@ sensing and LoRaWAN communication. 🏠🔥
   - I2C interface (no analog pins required)
 - 📡
   **[Grove-Wio-E5 Wireless Module](https://www.seeedstudio.com/Grove-LoRa-E5-STM32WLE5JC-p-4867.html)** -
-  LoRaWAN communication (STM32WLE5JC with SX126x)
+  LoRaWAN communication
+  - supporting both (G)FSK, BPSK, (G)MSK, and LoRa® modulations
+  - supports LoRaWAN® Class A/B/C protocol and a wide frequency plan, including
+    EU868/US915/AU915/AS923/KR920/IN865
+  - connect to different LoRaWAN server platforms like TheThingsStack,
+    Chirpstack, and others
+  - this Wio-E5 LoRaWAN STM32WLE5JC module, integrates the ARM Cortex M4
+    ultra-low-power MCU core and Wio SX126x
+  - LoRa details:
+    <https://www.seeedstudio.com/blog/2020/08/03/lorapedia-an-introduction-of-lora-and-lorawan-technology/>
 
 ## ✨ Features
 
@@ -92,7 +101,7 @@ comfortably in the available 8MB flash.
 ## 💻 Development Environment
 
 - **Platform**: Arduino M5Stack Board Manager v2.0.7
-- **IDE**: Arduino IDE / PlatformIO
+- **IDE**: PlatformIO within Visual Studio Code, or Arduino IDE
 
 ## 📁 Project Structure
 
@@ -111,9 +120,14 @@ comfortably in the available 8MB flash.
 2. 📚 Install required libraries (see dependency list in thermo.ino)
 3. 🔌 Connect the hardware components according to the Grove connector layout
 4. 🔒 **Configure WiFi credentials** (see Security Configuration Setup below)
-5. 📁 **Upload filesystem data**: `pio run --target uploadfs` (required for
+5. Hold down button 0 on the back of the dial while connecting the USB cable to
+   power the M5Dial on in "download code" mode.
+6. 📁 **Upload filesystem data**: `pio run --target uploadfs` (required for
    temps.csv and timezone fallback)
-6. 🚀 **Upload firmware**: `pio run --target upload`
+7. 🚀 **Upload firmware**: `pio run --target upload`
+8. Cycle the power (USB connector) off and back on to enter "Run Mode".
+9. Optionally connect a serial monitor in your IDE if you wish to view debug
+   messages.
 
 ### 🐠 PlatformIO Commands
 

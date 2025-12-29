@@ -70,7 +70,7 @@ const int portB[] = {1, 2};   // G1 = SCL, G2 = SDA
 int updateTime()
 {
     rtc.update();
-    String formattedTime = rtc.getFormattedTime();
+    String formattedTime = rtc.getFormattedDate();
     
     // Check if we have a valid time or if RTC is still initializing
     if (formattedTime.startsWith("RTC not") || formattedTime.startsWith("Time unavailable")) {
@@ -109,7 +109,7 @@ float updateTemperature()
     }
 
     // Serial.printf("Temperature: %.2f°F\n", temperature);
-    display.showText(TEMP, String(temperature, 1) + " F");
+    display.showText(TEMP, String(temperature, 1) + " F", COLOR_WHITE);
 
     return temperature;
 }
@@ -124,7 +124,7 @@ float getCachedTemperature()
     }
     
     // Display cached temperature
-    display.showText(TEMP, String(temperature, 1) + " F (cached)");
+    display.showText(TEMP, String(temperature, 1) + " F (cached)", COLOR_WHITE);
     return temperature;
 }
 
@@ -219,7 +219,7 @@ void setup()
     display.showText(STATUS_AREA, "System Ready", COLOR_MAGENTA);
     delay(500); // Brief pause to show ready message
     
-    String now = rtc.getFormattedTime();
+    String now = rtc.getFormattedDate();
     Serial.println("Setup done at " + now);
     Serial.println();
     display.showText(TIME, now);
@@ -363,7 +363,7 @@ void loop()
             if (timeSinceReading > 60) {
                 tempStr += " (" + String(timeSinceReading / 60) + "m ago)";
             }
-            display.showText(TEMP, tempStr, COLOR_GRAY);
+            display.showText(TEMP, tempStr, COLOR_WHITE);
         }
         
         lastDisplayUpdate = millis();
@@ -371,6 +371,7 @@ void loop()
 
     // Enhanced power saving with periodic temperature monitoring
     static bool powerSaveMode = false;
+    static unsigned long powerSaveModeStartTime = 0;
 
     if (isInactive)
     {
@@ -378,18 +379,20 @@ void loop()
         {
             setCpuFrequencyMhz(40); // Further reduce CPU frequency when idle
             powerSaveMode = true;
+            powerSaveModeStartTime = millis();
             Serial.println(String(loopCounter) + ") Entering power save mode (CPU 40MHz, periodic temp polling)\n");
         }
         
         // Put sensor to sleep after temperature reading (if we just polled)
         if (timeForTempPoll && tempSensor.getAwakeStatus()) {
+            tempSensor.getLastTemperatureF(); // Cache the last temperature reading
             delay(100); // Allow any pending operations to complete
             tempSensor.shutdown();
-            Serial.println("Temperature sensor shutdown after poll - next wake in 2 minutes");
+            Serial.printf("Temperature sensor shutdown after poll at %s. Sleeping for 2 minutes...\n", rtc.getFormattedTime().c_str());
         }
         
-        // Enter deep power save mode with longer sleep intervals
-        if (!deepPowerSaveMode) {
+        // Enter deep power save mode after being in power save mode for at least 30 seconds
+        if (!deepPowerSaveMode && (millis() - powerSaveModeStartTime > 30000)) {
             deepPowerSaveMode = true;
             Serial.println("Entering deep power save mode - temperature polling every 2 minutes");
         }
@@ -403,6 +406,7 @@ void loop()
             setCpuFrequencyMhz(80); // Return to normal power saving frequency
             powerSaveMode = false;
             deepPowerSaveMode = false;
+            powerSaveModeStartTime = 0;
             Serial.println("Exiting power save mode (CPU 80MHz, active temp monitoring)");
         }
         

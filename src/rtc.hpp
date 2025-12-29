@@ -175,12 +175,19 @@ public:
      * Displays current time from RTC and ESP32 internal timer
      */
     void update();
+
+    /**
+     * @brief Get formatted date (day + time) as a string
+     * @param includeWeekday Include the weekday in the formatted string
+     * @return Formatted date string
+     */
+    String getFormattedDate(bool includeWeekday = true);
+
     /**
      * @brief Get formatted time as a string
-     * @param includeWeekday Include the weekday in the formatted string
      * @return Formatted time string
      */
-    String getFormattedTime(bool includeWeekday = true);
+    String getFormattedTime();
 
     /**
      * @brief Get current time from system
@@ -243,12 +250,19 @@ public:
     bool updateFallbackTimezone(const String &newTimezone);
 
     /**
-     * @brief Format time for display
+     * @brief Format date for display
      * @param t Time structure
      * @param includeWeekday Include weekday in format
+     * @return Formatted date string
+     */
+    String formatDate(const struct tm *t, bool includeWeekday = true);
+
+    /**
+     * @brief Format time for display
+     * @param t Time structure
      * @return Formatted time string
      */
-    String formatTime(const struct tm *t, bool includeWeekday = true);
+    String formatTime(const struct tm *t);
 
     /**
      * @brief Check if system is initialized
