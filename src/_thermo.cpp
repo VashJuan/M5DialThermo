@@ -271,6 +271,7 @@ void loop()
 
     yield(); // Feed watchdog at start of loop
     M5.update();
+    yield(); // Feed watchdog after M5.update()
     // encoder.update();
 
     // Read current values first so they're available for all handlers
@@ -296,6 +297,7 @@ void loop()
         encoderChanged = false; // Clear flag
         long position = encoder.getPosition();
         Serial.printf("Encoder position: %ld\n", position);
+        yield(); // Feed watchdog after encoder handling
         // Note: noteActivity() already called in ISR
     }
 
@@ -304,10 +306,12 @@ void loop()
     {
         buttonPressed = false; // Clear flag
         M5.Speaker.tone(8000, 20);
+        yield(); // Feed watchdog after tone
         // Removed blocking delay
 
         // Request manual toggle through updateStove function
         updateStove(curTemp, hourOfWeek, true);
+        yield(); // Feed watchdog after manual update
         // Note: noteActivity() already called in ISR
     }
 
@@ -316,6 +320,7 @@ void loop()
     {
         buttonReleased = false; // Clear flag
         M5.Speaker.tone(12000, 20);
+        yield(); // Feed watchdog after tone
         // Removed blocking delay
         // Note: noteActivity() already called in ISR
     }
@@ -329,6 +334,7 @@ void loop()
     static unsigned long lastDisplayUpdate = 0;
     static unsigned long loopCounterForDisplay = 0;
     
+    yield(); // Feed watchdog before display check
     if (millis() - lastDisplayUpdate > 2000) { // Update every 2 seconds to reduce load
         String currentState = stove.getStateString();
         if (currentState.startsWith("PENDING")) {
@@ -336,6 +342,7 @@ void loop()
             yield(); // Feed watchdog after display update
         }
         
+        yield(); // Feed watchdog before status check
         // Show detailed status every ~25 loops (reduced frequency to prevent watchdog issues)
         if (!(loopCounterForDisplay++ % 25)) {
             float desiredTemp = stove.getCurrentDesiredTemperature();
@@ -346,12 +353,14 @@ void loop()
         }
         
         lastDisplayUpdate = millis();
+        yield(); // Feed watchdog after timestamp update
     }
 
     // Save battery power with display-friendly approach
     // Use CPU frequency scaling and WiFi/Temp Sensor sleep instead of deep sleep
     static bool powerSaveMode = false;
 
+    yield(); // Feed watchdog before power management
     if (millis() - lastActivityTime > activityTimeout)
     {
         if (!powerSaveMode)
@@ -361,6 +370,7 @@ void loop()
             tempSensor.shutdown();  // Shutdown sensor during idle periods
             powerSaveMode = true;
             Serial.println(String(loopCounter) + ") Entering power save mode (CPU 40MHz, sensor shutdown)");
+            yield(); // Feed watchdog after power save entry
         }
     }
     else
@@ -372,6 +382,7 @@ void loop()
             tempSensor.wakeUp();    // Wake up sensor when activity resumes
             powerSaveMode = false;
             Serial.println("Exiting power save mode (CPU 80MHz, sensor active)");
+            yield(); // Feed watchdog after power save exit
         }
     }
     yield(); // Feed watchdog after power management
@@ -379,6 +390,7 @@ void loop()
     // Note: stove status display is handled inside updateStove()
     // Note: M5Dial doesn't have PortB, use direct GPIO control\n
     // For now, just print stove status - actual GPIO control would need specific pin setup
+    yield(); // Feed watchdog before loop counter check
     if (!(loopCounter++ % 100)) {
         Serial.println(String(loopCounter) + ") Stove control: " + stove.getStateString());
         yield(); // Feed watchdog after serial output
@@ -387,4 +399,7 @@ void loop()
     yield(); // Feed watchdog before delay
     delay(50); // Reduced delay to prevent excessive looping while feeding watchdog more frequently
     yield(); // Feed watchdog after delay
+    
+    // Additional watchdog feeding at loop end
+    esp_task_wdt_reset();
 }
