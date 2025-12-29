@@ -58,7 +58,15 @@ const int portB[] = {1, 2};   // G1 = SCL, G2 = SDA
 int updateTime()
 {
     rtc.update();
-    display.showText(TIME, rtc.getFormattedTime());
+    String formattedTime = rtc.getFormattedTime();
+    
+    // Check if we have a valid time or if RTC is still initializing
+    if (formattedTime.startsWith("RTC not") || formattedTime.startsWith("Time unavailable")) {
+        display.showText(TIME, "Initializing clock...", COLOR_WHITE);
+        return -1; // Invalid time, return error code
+    }
+    
+    display.showText(TIME, formattedTime);
     return rtc.getDayOfWeek() * 24 + rtc.getHour(); // hour of the week
 }
 
@@ -223,6 +231,13 @@ void loop()
     // Read current values first so they're available for all handlers
     static int hourOfWeek = updateTime();
     static float curTemp = updateTemperature();
+
+    // Skip stove control if time is not yet available
+    if (hourOfWeek < 0) {
+        Serial.println("Waiting for RTC initialization...");
+        delay(1000);
+        return;
+    }
 
     // Handle encoder changes (interrupt-driven)
     if (encoderChanged)

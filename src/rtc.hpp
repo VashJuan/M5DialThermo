@@ -212,6 +212,12 @@ public:
     String getFallbackTimezone() const;
 
     /**
+     * @brief Get the currently active timezone (fallback or configured)
+     * @return Current active timezone string
+     */
+    String getCurrentTimezone() const;
+
+    /**
      * @brief Update the fallback timezone in temps.csv file
      * @param newTimezone New timezone string (e.g., "UTC-8", "EST5EDT")
      * @return true if successfully updated

@@ -33,6 +33,11 @@ communication.
 - Real-time clock functionality
 - Touch interface support
 - Sleep modes for power management
+- True geographic detection via IP geolocation API
+- ✅ Automatic timezone conversion to ESP32 format
+- ✅ Multi-layer fallback system for reliability
+- ✅ No manual configuration needed in most cases
+- ✅ Works globally regardless of device location
 
 ### M5Dial thermostat should
 

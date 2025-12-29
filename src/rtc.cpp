@@ -131,13 +131,24 @@ bool RTC::setup() {
     bool timezoneDetected = detectTimezoneFromLocation();
     if (!timezoneDetected) {
         Serial.println("Automatic timezone detection failed, using configured timezone");
+        // Explicitly configure the default timezone to ensure it's set
+        configTzTime(ntpConfig.timezone, ntpConfig.server1, ntpConfig.server2, ntpConfig.server3);
     }
     
-    // Synchronize with NTP
+    // Synchronize with NTP (timezone should already be configured)
     if (!synchronizeNTP()) {
         Serial.println("NTP synchronization failed, attempting fallback timezone setup...");
         WiFi.disconnect();
         return setupWithFallbackTimezone();
+    }
+    
+    // Final validation that timezone is working
+    struct tm timeinfo;
+    if (getLocalTime(&timeinfo)) {
+        Serial.printf("RTC setup complete. Local time: %s\n", formatTime(&timeinfo).c_str());
+        Serial.printf("Using timezone: %s\n", getCurrentTimezone().c_str());
+    } else {
+        Serial.println("Warning: RTC setup complete but getLocalTime() failed");
     }
     
     isInitialized = true;
@@ -180,12 +191,31 @@ void RTC::update() {
 }
 
 String RTC::getFormattedTime(bool includeWeekday) {
+    if (!isInitialized) {
+        return "RTC not initialized";
+    }
+    
+    // Ensure timezone is configured
+    String currentTimezone = getCurrentTimezone();
+    if (currentTimezone.length() == 0) {
+        Serial.println("Warning: No timezone configured, using UTC");
+        return "Time unavailable (no timezone)";
+    }
+    
     time_t now = getCurrentTime();
-    struct tm timeinfo;
-    if (!getLocalTime(&timeinfo)) {
+    if (now == 0) {
         return "Time unavailable";
     }
-    return formatTime(&timeinfo, includeWeekday);
+    
+    struct tm timeinfo;
+    if (!getLocalTime(&timeinfo)) {
+        Serial.printf("Warning: getLocalTime() failed with timezone: %s\n", currentTimezone.c_str());
+        return "Time unavailable";
+    }
+    
+    // Add timezone suffix to indicate what timezone we're showing
+    String timeStr = formatTime(&timeinfo, includeWeekday);
+    return timeStr + " (" + currentTimezone + ")";
 }
 
 time_t RTC::getCurrentTime() {
@@ -328,12 +358,26 @@ bool RTC::setupWithFallbackTimezone() {
     Serial.println("Setting up RTC with fallback timezone (no NTP sync)");
     
     // Load fallback timezone from CSV
-    loadFallbackTimezone();
+    if (!loadFallbackTimezone()) {
+        Serial.println("Using hardcoded fallback timezone");
+    }
     
     // Configure timezone without NTP servers
     configTzTime(fallbackTimezone.c_str(), nullptr, nullptr, nullptr);
     
-    Serial.printf("Timezone configured to fallback: %s\n", fallbackTimezone.c_str());
+    // Wait a moment for timezone to take effect
+    delay(100);
+    
+    // Validate timezone configuration
+    struct tm timeinfo;
+    time_t testTime = time(nullptr);
+    if (getLocalTime(&timeinfo)) {
+        Serial.printf("Timezone configured successfully: %s\n", fallbackTimezone.c_str());
+        Serial.printf("Local time: %s\n", formatTime(&timeinfo).c_str());
+    } else {
+        Serial.printf("Warning: Timezone configuration may have failed: %s\n", fallbackTimezone.c_str());
+    }
+    
     Serial.println("Note: Time will not be synchronized with NTP servers");
     Serial.println("Manual time adjustment may be required for accuracy");
     
@@ -343,6 +387,14 @@ bool RTC::setupWithFallbackTimezone() {
 
 String RTC::getFallbackTimezone() const {
     return fallbackTimezone;
+}
+
+String RTC::getCurrentTimezone() const {
+    // Return the currently active timezone
+    if (fallbackTimezone.length() > 0) {
+        return fallbackTimezone;
+    }
+    return String(ntpConfig.timezone);
 }
 
 bool RTC::updateFallbackTimezone(const String& newTimezone) {
@@ -463,9 +515,25 @@ bool RTC::detectTimezoneFromLocation() {
                 // Update the NTP configuration with detected timezone
                 ntpConfig.timezone = espTimezone.c_str();
                 
+                // Configure the timezone immediately
+                configTzTime(ntpConfig.timezone, ntpConfig.server1, ntpConfig.server2, ntpConfig.server3);
+                delay(100); // Allow time for configuration to take effect
+                
+                // Validate that timezone was applied
+                struct tm timeinfo;
+                if (getLocalTime(&timeinfo)) {
+                    Serial.printf("Timezone detection successful: %s\n", espTimezone.c_str());
+                } else {
+                    Serial.println("Warning: Timezone detection succeeded but getLocalTime() failed");
+                }
+                
                 http.end();
                 return true;
+            } else {
+                Serial.printf("Failed to convert timezone format: %s -> ESP32\n", utcOffset.c_str());
             }
+        } else {
+            Serial.println("Invalid timezone data received from API");
         }
     } else {
         Serial.printf("HTTP request failed: %d\n", httpResponseCode);
