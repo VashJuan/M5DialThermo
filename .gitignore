@@ -32,6 +32,10 @@ sources/
 # Libraries (uncomment if you want to exclude them)
 # libraries/
 .pio/
+.cache/
+packages/
+platforms/
+appstate.json
 
 # Temporary files
 *~

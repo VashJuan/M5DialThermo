@@ -13,7 +13,7 @@
 BaseTemperature,82.0
 
 # Fallback timezone for when NTP/WiFi is not available
-FallbackTimezone,UTC-8
+FallbackTimezone,PST8PDT,M3.2.0,M11.1.0
 
 # Hour,Temperature Offset,Description
 1,-15.0,1 AM - Night/Sleep

@@ -52,9 +52,9 @@ bool RTC::connectToWiFi() {
     
     WiFi.begin(wifiConfig.ssid, wifiConfig.password);
     int attempts = 0;
-    while (WiFi.status() != WL_CONNECTED && attempts < 100) { // Reduced from 500
+    while (WiFi.status() != WL_CONNECTED && attempts < 400) { // Increased to 400 for better reliability
         Serial.print('.');
-        delay(100); // Reduced from 500ms
+        delay(250); // Increased to 250ms for more stable connection
         yield(); // Feed watchdog
         attempts++;
     }
@@ -70,7 +70,7 @@ bool RTC::connectToWiFi() {
 
 // https://en.wikipedia.org/wiki/Network_Time_Protocol
 bool RTC::synchronizeNTP() {
-    const int MAX_NTP_ATTEMPTS = 50; // Reduced from 1000
+    const int MAX_NTP_ATTEMPTS = 100; // Increased from 50 for better reliability
     Serial.println("Synchronizing with NTP...");
     
     configTzTime(ntpConfig.timezone, ntpConfig.server1, ntpConfig.server2, ntpConfig.server3);
@@ -79,7 +79,7 @@ bool RTC::synchronizeNTP() {
     int attempts = 0;
     while (sntp_get_sync_status() != SNTP_SYNC_STATUS_COMPLETED && attempts < MAX_NTP_ATTEMPTS) {
         Serial.print('.');
-        delay(200); // Reduced from 1000ms
+        delay(250); // Increased to 250ms for more stable sync
         yield(); // Feed watchdog
         attempts++;
     }
@@ -210,6 +210,13 @@ String RTC::getFormattedTime(bool includeWeekday) {
         Serial.printf("Warning: getLocalTime() failed with timezone: %s\n", currentTimezone.c_str());
         return "Time unavailable";
     }
+    
+    // Debug: Print timezone and raw time info
+    Serial.printf("Debug: Using timezone: %s\n", currentTimezone.c_str());
+    Serial.printf("Debug: UTC time_t: %lu\n", (unsigned long)now);
+    Serial.printf("Debug: Local time from getLocalTime(): %04d/%02d/%02d %02d:%02d:%02d\n", 
+                  timeinfo.tm_year + 1900, timeinfo.tm_mon + 1, timeinfo.tm_mday,
+                  timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec);
     
     // Add timezone suffix to indicate what timezone we're showing
     String timeStr = formatTime(&timeinfo, includeWeekday);
@@ -496,7 +503,7 @@ bool RTC::detectTimezoneFromLocation() {
     
     HTTPClient http;
     http.begin("http://worldtimeapi.org/api/ip");
-    http.setTimeout(5000); // Reduced to 5 second timeout
+    http.setTimeout(12000); // Increased to 12 second timeout for better reliability
     
     int httpResponseCode = http.GET();
     

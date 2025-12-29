@@ -181,8 +181,13 @@ String Stove::update(float currentTemp, int hourOfWeek)
     String status = "";
     static unsigned long loopCounter = 0;
 
+    // Debug: Show that update method is being called
+    Serial.printf("DEBUG: Stove::update called - enabled=%s, manualOverride=%s\n", 
+                  enabled ? "true" : "false", manualOverride ? "true" : "false");
+
     // If manual override is active, don't run automatic control
     if (manualOverride) {
+        Serial.println("DEBUG: Manual override active, skipping automatic control");
         return (currentState == STOVE_ON) ? "ON" : "OFF";
     }
 
@@ -198,9 +203,10 @@ String Stove::update(float currentTemp, int hourOfWeek)
     float tempDiff = desiredTemp - currentTemp;
     
     // Show temperature info every 10 loop iterations (more frequent)
-    if (loopCounter++ % 10 == 0) {
+    //if (!(loopCounter % 10))
+     {
         Serial.printf("%lu) Temp: Current=%.1f°F, Target=%.1f°F, Diff=%.1f°F, State=%s\n", 
-                      loopCounter, currentTemp, desiredTemp, tempDiff, getStateString().c_str());
+                      loopCounter++, currentTemp, desiredTemp, tempDiff, getStateString().c_str());
     }
     
     // Determine if state change is needed
