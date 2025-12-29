@@ -202,14 +202,15 @@ void setup()
     // Clear status area for normal operation
     display.showText(STATUS_AREA, "");
 
+    // Disable interrupts - use polling instead to avoid watchdog timeouts
     // Setup interrupts for responsive user input
     // M5Dial button is typically on GPIO42, encoder on GPIO40/41
-    attachInterrupt(digitalPinToInterrupt(42), buttonPressISR, FALLING);
-    attachInterrupt(digitalPinToInterrupt(42), buttonReleaseISR, RISING);
+    // attachInterrupt(digitalPinToInterrupt(42), buttonPressISR, FALLING);
+    // attachInterrupt(digitalPinToInterrupt(42), buttonReleaseISR, RISING);
 
     // Note: M5Dial encoder interrupts may be handled internally by M5.Encoder
     // If not, you would attach to GPIO40 and GPIO41
-    Serial.println("Interrupts configured for responsive input");
+    Serial.println("Using polling for button input (interrupts disabled)");
     
     yield(); // Feed watchdog
 }
@@ -218,32 +219,55 @@ static uint32_t lastActivityTime = millis();
 bool recentActivity = false;
 int activityTimeout = 3000; // 3 seconds
 
-// Interrupt flags (volatile for ISR communication)
-volatile bool encoderChanged = false;
-volatile bool buttonPressed = false;
-volatile bool buttonReleased = false;
-
-// Debouncing variables for main loop
-static unsigned long lastButtonPressTime = 0;
-static unsigned long lastButtonReleaseTime = 0;
+// Polling variables for button handling (interrupts disabled)
+static bool lastButtonState = HIGH; // Assuming button is active LOW
+static unsigned long lastButtonChangeTime = 0;
 static const unsigned long BUTTON_DEBOUNCE_MS = 150;
 
-// Interrupt Service Routines
-void IRAM_ATTR encoderISR()
-{
-    encoderChanged = true;
-}
-
-void IRAM_ATTR buttonPressISR()
-{
-    // Minimal ISR - only set flag
-    buttonPressed = true;
-}
-
-void IRAM_ATTR buttonReleaseISR()
-{
-    // Minimal ISR - only set flag
-    buttonReleased = true;
+// Button polling functions (interrupts disabled)
+void checkButtonState() {
+    // Use M5.BtnA for button state (M5Dial's main button)
+    static bool buttonPressed = false;
+    
+    if (M5.BtnA.wasPressed()) {
+        unsigned long currentTime = millis();
+        if (currentTime - lastButtonChangeTime > BUTTON_DEBOUNCE_MS) {
+            lastButtonChangeTime = currentTime;
+            
+            // Update activity tracking
+            recentActivity = true;
+            lastActivityTime = currentTime;
+            
+            Serial.println("Button pressed (polling)");
+            M5.Speaker.tone(8000, 20);
+            yield();
+            
+            // Toggle manual override
+            // Get current temperature for safety check
+            float curTemp = tempSensor.readTemperatureFahrenheit();
+            if (tempSensor.isValidReading(curTemp)) {
+                String result = stove.toggleManualOverride(curTemp);
+                Serial.println("Manual toggle result: " + result);
+            } else {
+                Serial.println("Button press ignored - invalid temperature reading");
+            }
+        }
+    }
+    
+    if (M5.BtnA.wasReleased()) {
+        unsigned long currentTime = millis();
+        if (currentTime - lastButtonChangeTime > BUTTON_DEBOUNCE_MS) {
+            lastButtonChangeTime = currentTime;
+            
+            // Update activity tracking  
+            recentActivity = true;
+            lastActivityTime = currentTime;
+            
+            Serial.println("Button released (polling)");
+            M5.Speaker.tone(12000, 20);
+            yield();
+        }
+    }
 }
 
 void noteActivity()
@@ -281,69 +305,13 @@ void loop()
 
     yield(); // Feed watchdog before handlers
 
-    // Handle encoder changes (interrupt-driven)
-    if (encoderChanged)
-    {
-        encoderChanged = false; // Clear flag immediately
-        
-        // Update activity tracking
-        recentActivity = true;
-        lastActivityTime = millis();
-        
-        long position = encoder.getPosition();
-        Serial.printf("Encoder position: %ld\n", position);
-        yield(); // Feed watchdog after encoder handling
-    }
+    // Check button state using polling (interrupts disabled)
+    checkButtonState();
+    yield(); // Feed watchdog after button check
 
-    // Handle button press (interrupt-driven with main loop debouncing)
-    if (buttonPressed)
-    {
-        unsigned long currentTime = millis();
-        if (currentTime - lastButtonPressTime > BUTTON_DEBOUNCE_MS) {
-            buttonPressed = false; // Clear flag
-            lastButtonPressTime = currentTime;
-            
-            // Update activity tracking
-            recentActivity = true;
-            lastActivityTime = currentTime;
-            
-            // Safety: ensure we have valid temperature before processing
-            if (curTemp < 999.0) {
-                M5.Speaker.tone(8000, 20);
-                yield(); // Feed watchdog after tone
-                
-                // Request manual toggle through updateStove function
-                updateStove(curTemp, hourOfWeek, true);
-                yield(); // Feed watchdog after manual update
-            } else {
-                Serial.println("Button press ignored - invalid temperature reading");
-            }
-        } else {
-            // Too soon - clear flag without processing
-            buttonPressed = false;
-        }
-    }
-
-    // Handle button release (interrupt-driven with main loop debouncing)
-    if (buttonReleased)
-    {
-        unsigned long currentTime = millis();
-        if (currentTime - lastButtonReleaseTime > BUTTON_DEBOUNCE_MS) {
-            buttonReleased = false; // Clear flag
-            lastButtonReleaseTime = currentTime;
-            
-            // Update activity tracking
-            recentActivity = true;
-            lastActivityTime = currentTime;
-            
-            M5.Speaker.tone(12000, 20);
-            yield(); // Feed watchdog after tone
-        } else {
-            // Too soon - clear flag without processing
-            buttonReleased = false;
-        }
-    }
-
+    // Handle encoder changes using M5 built-in handling
+    // M5.update() handles encoder internally, no additional processing needed
+    
     // Update stove status (handles both manual and automatic modes)
     bool stoveOn = updateStove(curTemp, hourOfWeek);
     yield(); // Feed watchdog after stove update
