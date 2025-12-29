@@ -46,6 +46,9 @@ private:
     uint8_t i2cAddress;            // I2C address of the sensor (0x18-0x1F)
     MCP9808_Resolution resolution; // Current resolution setting
     bool isAwake;                  // Power state tracking
+    float lastTemperatureC;        // Cached temperature reading in Celsius
+    float lastTemperatureF;        // Cached temperature reading in Fahrenheit
+    unsigned long lastReadTime;    // Timestamp of last sensor read
 
     /**
      * @brief Convert resolution enum to resolution mode value
@@ -90,6 +93,24 @@ public:
      * @return Temperature in Kelvin
      */
     float readTemperatureKelvin();
+
+    /**
+     * @brief Get last cached temperature reading in Celsius (no sensor read)
+     * @return Last temperature reading in Celsius
+     */
+    float getLastTemperatureC() const;
+
+    /**
+     * @brief Get last cached temperature reading in Fahrenheit (no sensor read)
+     * @return Last temperature reading in Fahrenheit
+     */
+    float getLastTemperatureF() const;
+
+    /**
+     * @brief Get timestamp of last sensor reading
+     * @return Timestamp in milliseconds
+     */
+    unsigned long getLastReadTime() const;
 
     /**
      * @brief Set the sensor resolution

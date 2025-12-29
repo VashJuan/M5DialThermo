@@ -43,6 +43,17 @@
 void handleButtonPress();
 void handleButtonRelease();
 
+// Activity tracking variables
+static uint32_t lastActivityTime = millis();
+bool recentActivity = false;
+int activityTimeout = 3000; // 3 seconds
+
+// Temperature monitoring constants
+static const unsigned long TEMP_POLL_INTERVAL = 2 * 60 * 1000; // 2 minutes in milliseconds
+static const unsigned long TEMP_POLL_ACTIVE_INTERVAL = 5 * 1000; // 5 seconds when active
+static unsigned long lastTempPoll = 0;
+static bool deepPowerSaveMode = false;
+
 /**
  * per https://docs.m5stack.com/en/core/M5Dial#pinmap:
  * https://m5stack-doc.oss-cn-shenzhen.aliyuncs.com/684/S007_PinMap_01.jpg
@@ -100,6 +111,20 @@ float updateTemperature()
     // Serial.printf("Temperature: %.2f°F\n", temperature);
     display.showText(TEMP, String(temperature, 1) + " F");
 
+    return temperature;
+}
+
+float getCachedTemperature()
+{
+    float temperature = tempSensor.getLastTemperatureF();
+    
+    // If no cached reading is available, take a new reading
+    if (isnan(temperature)) {
+        return updateTemperature();
+    }
+    
+    // Display cached temperature
+    display.showText(TEMP, String(temperature, 1) + " F (cached)");
     return temperature;
 }
 
@@ -237,10 +262,6 @@ void handleButtonRelease() {
     Serial.println("Button released");
 }
 
-static uint32_t lastActivityTime = millis();
-bool recentActivity = false;
-int activityTimeout = 3000; // 3 seconds
-
 // Button interrupt handler (replaces polling)
 void handleButtonInterrupts() {
     // Use M5's built-in button state detection for reliability
@@ -253,12 +274,6 @@ void handleButtonInterrupts() {
     }
 }
 
-void noteActivity()
-{
-    recentActivity = true;
-    lastActivityTime = millis();
-}
-
 void loop()
 {
     static const int sleepShort = 1; // 1 second
@@ -269,9 +284,32 @@ void loop()
     yield(); // Feed watchdog at start of loop
     M5.update();
 
-    // Read current values first so they're available for all handlers
+    unsigned long currentTime = millis();
+    bool isInactive = (currentTime - lastActivityTime > activityTimeout);
+    
+    // Determine temperature poll interval based on activity
+    unsigned long tempPollInterval = isInactive ? TEMP_POLL_INTERVAL : TEMP_POLL_ACTIVE_INTERVAL;
+    
+    // Check if it's time for temperature polling
+    bool timeForTempPoll = (currentTime - lastTempPoll >= tempPollInterval);
+    
+    // Wake up sensor before temperature reading if needed
+    if (timeForTempPoll && !tempSensor.getAwakeStatus()) {
+        tempSensor.wakeUp();
+        delay(10); // Allow sensor to stabilize
+        Serial.println("Temperature sensor woken for periodic poll");
+    }
+
+    // Read current values (time always, temperature only when needed)
     static int hourOfWeek = updateTime();
-    static float curTemp = updateTemperature();
+    static float curTemp = 999.0; // Initialize with invalid value
+    
+    if (timeForTempPoll) {
+        curTemp = updateTemperature();
+        lastTempPoll = currentTime;
+        Serial.printf("Periodic temperature poll: %.1f°F (interval: %lus)\n", 
+                     curTemp, tempPollInterval / 1000);
+    }
 
     // Skip stove control if time is not yet available
     if (hourOfWeek < 0) {
@@ -287,52 +325,91 @@ void loop()
     // M5.update() handles encoder internally, no additional processing needed
     
     // Update stove status (handles both manual and automatic modes)
-    bool stoveOn = updateStove(curTemp, hourOfWeek);
+    // Only update if we have a valid temperature reading
+    static bool stoveOn = false;
+    if (tempSensor.isValidReading(curTemp)) {
+        stoveOn = updateStove(curTemp, hourOfWeek);
+    }
 
     // For pending states, update display more frequently to show countdown
     // Also show detailed temperature information periodically
     static unsigned long lastDisplayUpdate = 0;
     static unsigned long loopCounterForDisplay = 0;
     
-    if (millis() - lastDisplayUpdate > 2000) { // Update every 2 seconds to reduce load
+    if (millis() - lastDisplayUpdate > (isInactive ? 10000 : 2000)) { // Update less frequently when inactive
         String currentState = stove.getStateString();
         if (currentState.startsWith("PENDING")) {
             display.showText(STOVE, "Stove: " + currentState);
         }
         
-        // Show detailed status every ~25 loops (reduced frequency to prevent watchdog issues)
+        // Show detailed status with cached temperature during inactive periods
         if (!(loopCounterForDisplay++ % 25)) {
-            float desiredTemp = stove.getCurrentDesiredTemperature();
-            float tempDiff = desiredTemp - curTemp;
-            String statusMsg = String(desiredTemp, 1) + "F target, diff " + String(tempDiff, 1) + "F";
-            display.showText(STATUS_AREA, statusMsg, COLOR_BLUE);
+            float displayTemp = isInactive ? tempSensor.getLastTemperatureF() : curTemp;
+            if (!isnan(displayTemp)) {
+                float desiredTemp = stove.getCurrentDesiredTemperature();
+                float tempDiff = desiredTemp - displayTemp;
+                String statusMsg = String(desiredTemp, 1) + "F target, diff " + String(tempDiff, 1) + "F";
+                if (isInactive) {
+                    statusMsg += " (power save)";
+                }
+                display.showText(STATUS_AREA, statusMsg, isInactive ? COLOR_GRAY : COLOR_BLUE);
+            }
+        }
+        
+        // Update cached temperature display during inactive periods
+        if (isInactive && !isnan(tempSensor.getLastTemperatureF())) {
+            unsigned long timeSinceReading = (currentTime - tempSensor.getLastReadTime()) / 1000; // seconds
+            String tempStr = String(tempSensor.getLastTemperatureF(), 1) + " F";
+            if (timeSinceReading > 60) {
+                tempStr += " (" + String(timeSinceReading / 60) + "m ago)";
+            }
+            display.showText(TEMP, tempStr, COLOR_GRAY);
         }
         
         lastDisplayUpdate = millis();
     }
 
-    // Save battery power with display-friendly approach
-    // Use CPU frequency scaling and WiFi/Temp Sensor sleep instead of deep sleep
+    // Enhanced power saving with periodic temperature monitoring
     static bool powerSaveMode = false;
 
-    if (millis() - lastActivityTime > activityTimeout)
+    if (isInactive)
     {
         if (!powerSaveMode)
         {
             setCpuFrequencyMhz(40); // Further reduce CPU frequency when idle
-            tempSensor.shutdown();  // Shutdown sensor during idle periods
             powerSaveMode = true;
-            Serial.println(String(loopCounter) + ") Entering power save mode (CPU 40MHz, sensor shutdown)\n");
+            Serial.println(String(loopCounter) + ") Entering power save mode (CPU 40MHz, periodic temp polling)\n");
         }
+        
+        // Put sensor to sleep after temperature reading (if we just polled)
+        if (timeForTempPoll && tempSensor.getAwakeStatus()) {
+            delay(100); // Allow any pending operations to complete
+            tempSensor.shutdown();
+            Serial.println("Temperature sensor shutdown after poll - next wake in 2 minutes");
+        }
+        
+        // Enter deep power save mode with longer sleep intervals
+        if (!deepPowerSaveMode) {
+            deepPowerSaveMode = true;
+            Serial.println("Entering deep power save mode - temperature polling every 2 minutes");
+        }
+        
+        delay(1000); // Sleep longer between loops when inactive
     }
     else
     {
         if (powerSaveMode)
         {
             setCpuFrequencyMhz(80); // Return to normal power saving frequency
-            tempSensor.wakeUp();    // Wake up sensor when activity resumes
             powerSaveMode = false;
-            Serial.println("Exiting power save mode (CPU 80MHz, sensor active)");
+            deepPowerSaveMode = false;
+            Serial.println("Exiting power save mode (CPU 80MHz, active temp monitoring)");
+        }
+        
+        // Ensure sensor is awake during active periods
+        if (!tempSensor.getAwakeStatus()) {
+            tempSensor.wakeUp();
+            Serial.println("Temperature sensor woken for active period");
         }
     }
 
@@ -340,8 +417,17 @@ void loop()
     // Note: M5Dial doesn't have PortB, use direct GPIO control\n
     // For now, just print stove status - actual GPIO control would need specific pin setup
 
-    delay(50); // Reduced delay to prevent excessive looping
+    // Adaptive delay based on power mode
+    if (deepPowerSaveMode) {
+        delay(500); // Longer sleep in deep power save mode
+    } else if (powerSaveMode) {
+        delay(100); // Medium sleep in power save mode
+    } else {
+        delay(50);  // Short sleep during active periods
+    }
     
     // Periodic watchdog feeding at loop end
     esp_task_wdt_reset();
+    
+    loopCounter++;
 }

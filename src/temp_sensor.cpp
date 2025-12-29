@@ -21,7 +21,8 @@
 TemperatureSensor tempSensor(0x18, MCP9808_Resolution::RES_0_0625C);
 
 TemperatureSensor::TemperatureSensor(uint8_t address, MCP9808_Resolution res) 
-    : i2cAddress(address), resolution(res), isAwake(false)
+    : i2cAddress(address), resolution(res), isAwake(false), 
+      lastTemperatureC(NAN), lastTemperatureF(NAN), lastReadTime(0)
 {
 }
 
@@ -78,6 +79,11 @@ float TemperatureSensor::readTemperature()
         return NAN;
     }
     
+    // Cache the valid reading
+    lastTemperatureC = temperature;
+    lastTemperatureF = (temperature * 9.0 / 5.0) + 32.0; // Convert to Fahrenheit for cache
+    lastReadTime = millis();
+    
     return temperature;
 }
 
@@ -95,6 +101,11 @@ float TemperatureSensor::readTemperatureFahrenheit()
         Serial.println("Invalid temperature reading");
         return NAN;
     }
+    
+    // Cache the valid reading
+    lastTemperatureF = temperature;
+    lastTemperatureC = (temperature - 32.0) * 5.0 / 9.0; // Convert to Celsius for cache
+    lastReadTime = millis();
     
     return temperature;
 }
@@ -201,4 +212,19 @@ const char* TemperatureSensor::getResolutionString() const
         default:
             return "Unknown";
     }
+}
+
+float TemperatureSensor::getLastTemperatureC() const
+{
+    return lastTemperatureC;
+}
+
+float TemperatureSensor::getLastTemperatureF() const
+{
+    return lastTemperatureF;
+}
+
+unsigned long TemperatureSensor::getLastReadTime() const
+{
+    return lastReadTime;
 }

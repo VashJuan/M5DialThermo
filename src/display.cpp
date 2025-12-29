@@ -89,6 +89,7 @@ uint32_t Display::getColorValue(TextColor color)
         case COLOR_YELLOW: return TFT_YELLOW;
         case COLOR_CYAN: return TFT_CYAN;
         case COLOR_MAGENTA: return TFT_MAGENTA;
+        case COLOR_GRAY: return TFT_LIGHTGREY;
         default:          return TFT_BLACK;
     }
 }
