@@ -57,7 +57,13 @@ private:
     static const float SAFETY_MAX_TEMP; // Maximum safe temperature
 
     // Temperature schedule adjustments by hour (24-hour format)
-    static const float timeOffset[25];
+    float timeOffset[25];
+
+    /**
+     * @brief Load configuration from temps.csv file
+     * @return true if successful, false if file not found or error
+     */
+    bool loadConfigFromCSV();
 
     /**
      * @brief Get temperature adjustment for current time
@@ -82,9 +88,9 @@ public:
     /**
      * @brief Constructor
      * @param pin GPIO pin for relay control (default: 2)
-     * @param baseTemp Base desired temperature in °F (default: 68.0)
+     * @param baseTemp Base desired temperature in °F (default: loaded from CSV, fallback: 68.0)
      */
-    Stove(int pin = 2, float baseTemp = 68.0);
+    Stove(int pin = 2, float baseTemp = -1.0);
 
     /**
      * @brief Destructor

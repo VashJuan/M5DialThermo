@@ -70,7 +70,7 @@ int Display::getAreaTextSize(DisplayArea area)
         case TITLE:  return 1;
         case TIME:   return 1;
         case TEMP:   return 2;  // Temperature should be larger
-        case STOVE:  return 1;
+        case STOVE:  return 2;
         case STATUS_AREA: return 1;
         default:     return 1;
     }

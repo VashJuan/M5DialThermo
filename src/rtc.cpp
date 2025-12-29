@@ -243,7 +243,6 @@ bool RTC::isSystemInitialized() const {
     return isInitialized;
 }
 
-
 int RTC::getHour() {
     auto dt = M5.Rtc.getDateTime();
     return dt.time.hours;

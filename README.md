@@ -3,6 +3,16 @@
 A thermostat project for the M5Stack Dial using temperature sensing and LoRaWAN
 communication.
 
+## User Notes
+
+- The base temperature and hourly temperature adjustments are configured in the
+  easily edited file: **temps.csv**
+- The temperature schedule varies from -15°F (nighttime) to 0°F (daytime comfort
+  periods)
+- Edit temps.csv to customize your thermostat schedule without modifying code
+- If temps.csv is not found, the system uses fallback defaults (68°F base
+  temperature) temps.csv
+
 ## Hardware
 
 - **[M5Dial](https://m5stack.com/products/m5dial)** - Main controller with
@@ -120,6 +130,48 @@ If you get compilation errors about missing `secrets.h`:
 1. Make sure you copied `secrets_template.h` to `secrets.h`
 2. Verify the file exists in the same directory as `rtc.cpp`
 3. Check that your WiFi credentials are properly defined in `secrets.h`
+
+## Temperature Configuration
+
+### Customizing Temperature Schedule
+
+The thermostat temperature settings are configured through the `temps.csv` file,
+making it easy for users to customize without modifying code.
+
+### Temperature Configuration File Structure
+
+The `temps.csv` file contains:
+
+1. **Base Temperature**: The baseline target temperature in Fahrenheit
+2. **Hourly Offsets**: Temperature adjustments for each hour of the day (1 AM to
+   Midnight)
+
+### Editing Temperature Schedule
+
+1. **Open `temps.csv` in any text editor or spreadsheet program**
+2. **Modify the base temperature**: Change the value after `BaseTemperature,`
+3. **Adjust hourly offsets**: Modify the temperature offset values for each hour
+   - Negative values reduce temperature below base
+   - Positive values increase temperature above base
+   - Example: If base is 68°F and hour 1 has -15.0 offset, target temperature at
+     1 AM will be 53°F
+
+### Example Temperature Schedule
+
+```csv
+BaseTemperature,70.0
+
+# Hour,Temperature Offset,Description
+1,-12.0,1 AM - Sleep mode (58°F)
+8,0.0,8 AM - Normal comfort (70°F)
+22,-8.0,10 PM - Evening wind-down (62°F)
+```
+
+### File Location
+
+- Place `temps.csv` on the SD card or in the device's file system
+- The system will automatically load settings on startup
+- If file is not found, defaults to 68°F base with standard schedule
 
 ## License
 

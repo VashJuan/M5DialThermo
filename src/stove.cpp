@@ -15,6 +15,8 @@
 // https://docs.m5stack.com/en/arduino/m5unified/imu_class
 
 #include <M5Unified.h>
+#include <FS.h>
+#include <SD.h>
 #include "stove.hpp"
 
 // Global instance for easy access
@@ -23,31 +25,122 @@ Stove stove;
 // Safety maximum temperature
 const float Stove::SAFETY_MAX_TEMP = 82.0;
 
-// Temperature schedule adjustments throughout the day (°F)
-// Index 0 is unused, indices 1-24 represent hours 1-24 (1 AM to Midnight)
-const float Stove::timeOffset[25] = {
-    0.0,   // Index 0 - unused
-    -15.0, -15.0, -15.0, -15.0, -12.0, -5.0,   // 1 AM to 6 AM - Night/Sleep
-    -2.0,   0.0,   0.0,  -1.0,  -3.0,  -4.0,   // 7 AM to Noon - Morning/Work
-    -3.0,  -3.0,  -3.0,  -2.0,   0.0,   0.0,   // 1 PM to 6 PM - Afternoon
-    -1.0,  -4.0,  -7.0, -10.0, -12.0, -12.0    // 7 PM to Midnight - Evening/Night
-};
-
 Stove::Stove(int pin, float baseTemp) : 
     relayPin(pin), 
     currentState(STOVE_OFF), 
-    baseTemperature(baseTemp),
     lastStateChange(0),
     minChangeInterval(300000), // 5 minutes in milliseconds
     enabled(true),
     manualOverride(false)
 {
+    // Initialize timeOffset array with default values as fallback
+    timeOffset[0] = 0.0;   // Index 0 - unused
+    for (int i = 1; i <= 24; i++) {
+        timeOffset[i] = -5.0;  // Default fallback offset
+    }
+    
+    // Try to load configuration from CSV file
+    bool csvLoaded = loadConfigFromCSV();
+    
+    // Set base temperature
+    if (baseTemp >= 0) {
+        // Use provided temperature
+        baseTemperature = baseTemp;
+    } else if (csvLoaded) {
+        // baseTemperature was set by loadConfigFromCSV
+        // No action needed
+    } else {
+        // Fallback default
+        baseTemperature = 68.0;
+    }
+}
 }
 
 Stove::~Stove()
 {
     // Turn off stove when object is destroyed
     setRelayState(false);
+}
+
+bool Stove::loadConfigFromCSV()
+{
+    // Try to open the temps.csv file from SD card first, then from SPIFFS
+    File file;
+    
+    // Check if SD card is available and try to open from there
+    if (SD.begin()) {
+        file = SD.open("/temps.csv", "r");
+        if (!file) {
+            // Try from root directory
+            file = SD.open("temps.csv", "r");
+        }
+    }
+    
+    if (!file) {
+        Serial.println("Warning: Could not open temps.csv, using default values");
+        return false;
+    }
+
+    Serial.println("Loading configuration from temps.csv");
+    
+    String line;
+    bool baseTemperatureSet = false;
+    
+    // Initialize timeOffset array with defaults
+    timeOffset[0] = 0.0;  // Index 0 - unused
+    for (int i = 1; i <= 24; i++) {
+        timeOffset[i] = -5.0;  // Default fallback
+    }
+    
+    while (file.available()) {
+        line = file.readStringUntil('\n');
+        line.trim();
+        
+        // Skip comments and empty lines
+        if (line.length() == 0 || line.startsWith("#") || line.startsWith("Hour,")) {
+            continue;
+        }
+        
+        // Parse base temperature
+        if (line.startsWith("BaseTemperature,")) {
+            int commaIndex = line.indexOf(',');
+            if (commaIndex != -1) {
+                String tempStr = line.substring(commaIndex + 1);
+                baseTemperature = tempStr.toFloat();
+                baseTemperatureSet = true;
+                Serial.printf("Loaded base temperature: %.1f°F\n", baseTemperature);
+                continue;
+            }
+        }
+        
+        // Parse hourly offsets (format: Hour,Offset,Description)
+        int firstComma = line.indexOf(',');
+        int secondComma = line.indexOf(',', firstComma + 1);
+        
+        if (firstComma != -1 && secondComma != -1) {
+            String hourStr = line.substring(0, firstComma);
+            String offsetStr = line.substring(firstComma + 1, secondComma);
+            
+            int hour = hourStr.toInt();
+            float offset = offsetStr.toFloat();
+            
+            if (hour >= 1 && hour <= 24) {
+                timeOffset[hour] = offset;
+                Serial.printf("Hour %d: %.1f°F offset\n", hour, offset);
+            }
+        }
+    }
+    
+    file.close();
+    
+    if (!baseTemperatureSet) {
+        Serial.println("Warning: Base temperature not found in CSV, using default 68.0°F");
+        baseTemperature = 68.0;
+        return false;
+    }
+    
+    Serial.println("Successfully loaded temperature configuration from temps.csv");
+    return true;
 }
 
 void Stove::setup()
@@ -58,6 +151,7 @@ void Stove::setup()
     
     Serial.printf("Stove control initialized on pin %d, base temperature: %.1f°F\n", 
                   relayPin, baseTemperature);
+    Serial.println("Temperature schedule loaded from temps.csv (or defaults if file not found)");
 }
 
 float Stove::getTemperatureAdjustment(int hour)
