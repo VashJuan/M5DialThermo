@@ -32,7 +32,7 @@ Stove::Stove(int pin, float baseTemp) :
     relayPin(pin), 
     currentState(STOVE_OFF), 
     lastStateChange(0),
-    minChangeInterval(30000), // 30 seconds in milliseconds
+    minChangeInterval(180000), // 3 minutes delay between state changes
     enabled(true),
     manualOverride(false)
 {
@@ -203,7 +203,7 @@ String Stove::update(float currentTemp, int hourOfWeek)
     float desiredTemp = getDesiredTemperature(rtc);   
     float tempDiff = desiredTemp - currentTemp;
     
-    if (!(loopCounter++ % 50))
+    if (!(loopCounter % 100))
      {
         Serial.printf("%lu) Temp: Current=%.1f°F, Target=%.1f°F, Diff=%.1f°F, State=%s\n", 
                       loopCounter, currentTemp, desiredTemp, tempDiff, getStateString().c_str());
@@ -245,12 +245,15 @@ String Stove::update(float currentTemp, int hourOfWeek)
     } else if (currentState == STOVE_PENDING_ON && !canChangeState()) {
         // Show remaining time for pending state
         unsigned long remainingSeconds = getTimeUntilNextChange();
-        if (!(loopCounter % 50)) {
-            Serial.printf("Stove: PENDING_ON, %lu seconds until ON\n", remainingSeconds);
-        }
+        //if (!(loopCounter % 100)) {
+        //    Serial.printf("Stove: PENDING_ON, %lu seconds until ON\n", remainingSeconds);
+        //}
     } else if (currentState == STOVE_PENDING_OFF && canChangeState()) {
         status = turnOff();
     }
+    
+    // Increment loop counter (will naturally overflow and wrap to 0)
+    loopCounter++;
     
     return status;
 }

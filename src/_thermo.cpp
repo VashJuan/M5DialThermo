@@ -222,37 +222,36 @@ int activityTimeout = 3000; // 3 seconds
 volatile bool encoderChanged = false;
 volatile bool buttonPressed = false;
 volatile bool buttonReleased = false;
-volatile unsigned long lastButtonTime = 0;
 
 // Interrupt Service Routines
 void IRAM_ATTR encoderISR()
 {
     encoderChanged = true;
-    recentActivity = true;
-    lastActivityTime = millis();
 }
 
 void IRAM_ATTR buttonPressISR()
 {
-    unsigned long currentTime = millis();
-    if (currentTime - lastButtonTime > 50)
-    { // Debounce 50ms
+    // Simple debounce check using interrupt time difference
+    static unsigned long lastInterruptTime = 0;
+    unsigned long interruptTime = millis();
+    
+    // Debounce: ignore if too soon after last interrupt
+    if (interruptTime - lastInterruptTime > 100) {
         buttonPressed = true;
-        recentActivity = true;
-        lastActivityTime = currentTime;
-        lastButtonTime = currentTime;
+        lastInterruptTime = interruptTime;
     }
 }
 
 void IRAM_ATTR buttonReleaseISR()
 {
-    unsigned long currentTime = millis();
-    if (currentTime - lastButtonTime > 50)
-    { // Debounce 50ms
+    // Simple debounce check using interrupt time difference
+    static unsigned long lastInterruptTime = 0;
+    unsigned long interruptTime = millis();
+    
+    // Debounce: ignore if too soon after last interrupt
+    if (interruptTime - lastInterruptTime > 100) {
         buttonReleased = true;
-        recentActivity = true;
-        lastActivityTime = currentTime;
-        lastButtonTime = currentTime;
+        lastInterruptTime = interruptTime;
     }
 }
 
@@ -294,35 +293,50 @@ void loop()
     // Handle encoder changes (interrupt-driven)
     if (encoderChanged)
     {
-        encoderChanged = false; // Clear flag
+        encoderChanged = false; // Clear flag immediately
+        
+        // Update activity tracking
+        recentActivity = true;
+        lastActivityTime = millis();
+        
         long position = encoder.getPosition();
         Serial.printf("Encoder position: %ld\n", position);
         yield(); // Feed watchdog after encoder handling
-        // Note: noteActivity() already called in ISR
     }
 
     // Handle button press (interrupt-driven)
     if (buttonPressed)
     {
-        buttonPressed = false; // Clear flag
-        M5.Speaker.tone(8000, 20);
-        yield(); // Feed watchdog after tone
-        // Removed blocking delay
-
-        // Request manual toggle through updateStove function
-        updateStove(curTemp, hourOfWeek, true);
-        yield(); // Feed watchdog after manual update
-        // Note: noteActivity() already called in ISR
+        buttonPressed = false; // Clear flag immediately
+        
+        // Update activity tracking
+        recentActivity = true;
+        lastActivityTime = millis();
+        
+        // Safety: ensure we have valid temperature before processing
+        if (curTemp < 999.0) {
+            M5.Speaker.tone(8000, 20);
+            yield(); // Feed watchdog after tone
+            
+            // Request manual toggle through updateStove function
+            updateStove(curTemp, hourOfWeek, true);
+            yield(); // Feed watchdog after manual update
+        } else {
+            Serial.println("Button press ignored - invalid temperature reading");
+        }
     }
 
     // Handle button release (interrupt-driven)
     if (buttonReleased)
     {
-        buttonReleased = false; // Clear flag
+        buttonReleased = false; // Clear flag immediately
+        
+        // Update activity tracking
+        recentActivity = true;
+        lastActivityTime = millis();
+        
         M5.Speaker.tone(12000, 20);
         yield(); // Feed watchdog after tone
-        // Removed blocking delay
-        // Note: noteActivity() already called in ISR
     }
 
     // Update stove status (handles both manual and automatic modes)
@@ -348,7 +362,7 @@ void loop()
             float desiredTemp = stove.getCurrentDesiredTemperature();
             float tempDiff = desiredTemp - curTemp;
             String statusMsg = String(desiredTemp, 1) + "°F target, diff " + String(tempDiff, 1) + "°F";
-            display.showText(STATUS_AREA, statusMsg, COLOR_MAGENTA);
+            display.showText(STATUS_AREA, statusMsg, COLOR_BLUE);
             yield(); // Feed watchdog after status display
         }
         
@@ -369,7 +383,7 @@ void loop()
             yield(); // Feed watchdog before sensor shutdown
             tempSensor.shutdown();  // Shutdown sensor during idle periods
             powerSaveMode = true;
-            Serial.println(String(loopCounter) + ") Entering power save mode (CPU 40MHz, sensor shutdown)");
+            Serial.println(String(loopCounter) + ") Entering power save mode (CPU 40MHz, sensor shutdown)\n");
             yield(); // Feed watchdog after power save entry
         }
     }
@@ -390,13 +404,7 @@ void loop()
     // Note: stove status display is handled inside updateStove()
     // Note: M5Dial doesn't have PortB, use direct GPIO control\n
     // For now, just print stove status - actual GPIO control would need specific pin setup
-    yield(); // Feed watchdog before loop counter check
-    if (!(loopCounter++ % 100)) {
-        Serial.println(String(loopCounter) + ") Stove control: " + stove.getStateString());
-        yield(); // Feed watchdog after serial output
-    }
 
-    yield(); // Feed watchdog before delay
     delay(50); // Reduced delay to prevent excessive looping while feeding watchdog more frequently
     yield(); // Feed watchdog after delay
     

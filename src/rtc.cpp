@@ -16,7 +16,7 @@ RTC rtc;
 
 // Default configuration constants
 // WiFi credentials are now defined in secrets.h
-static const char* DEFAULT_NTP_TIMEZONE = "UTC-8";
+static const char* DEFAULT_NTP_TIMEZONE = "PST8";
 static const char* DEFAULT_NTP_SERVER1 = "time.nist.gov";
 static const char* DEFAULT_NTP_SERVER2 = "pool.ntp.org";
 static const char* DEFAULT_NTP_SERVER3 = "0.pool.ntp.org";
@@ -228,14 +228,14 @@ bool RTC::setRTCFromNTP() {
 }
 
 bool RTC::testDNSConnectivity() {
-    Serial.println("Testing DNS connectivity...");
+    //Serial.println("Testing DNS connectivity...");
     
     // Try to resolve a known domain
     IPAddress result;
     int dnsResult = WiFi.hostByName("google.com", result);
     
     if (dnsResult == 1) {
-        Serial.printf("DNS test successful: google.com -> %s\n", result.toString().c_str());
+      //  Serial.printf("DNS test successful: google.com -> %s\n", result.toString().c_str());
         return true;
     } else {
         Serial.printf("DNS test failed: error %d\n", dnsResult);
@@ -243,7 +243,7 @@ bool RTC::testDNSConnectivity() {
         // Try with the NTP server directly
         dnsResult = WiFi.hostByName(ntpConfig.server1, result);
         if (dnsResult == 1) {
-            Serial.printf("NTP server DNS resolution successful: %s -> %s\n", ntpConfig.server1, result.toString().c_str());
+           //Serial.printf("NTP server DNS resolution successful: %s -> %s\n", ntpConfig.server1, result.toString().c_str());
             return true;
         } else {
             Serial.printf("NTP server DNS resolution failed: %s (error %d)\n", ntpConfig.server1, dnsResult);
