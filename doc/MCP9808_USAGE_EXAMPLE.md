@@ -15,6 +15,11 @@ power management.
 - **Power Management**: Sleep/wake functionality for battery savings
 - **Configurable Resolution**: 4 different resolution modes with different
   sampling times
+- **Temperature Caching**: Stores last readings in memory for power-efficient
+  access
+- **Automatic Wake/Sleep**: Intelligent sensor state management
+- **Periodic Polling**: Optimized for long-term monitoring with minimal power
+  usage
 
 ## Hardware Connections
 
@@ -80,6 +85,59 @@ tempSensor.wakeUp();
 float temp = tempSensor.readTemperature();  // Sensor auto-wakes if needed
 ```
 
+### Cached Temperature Access
+
+```cpp
+// Read new temperature and cache it
+float currentTemp = tempSensor.readTemperatureFahrenheit();
+
+// Later, get cached value without sensor read (power efficient)
+float cachedTemp = tempSensor.getLastTemperatureF();
+float cachedTempC = tempSensor.getLastTemperatureC();
+unsigned long readTime = tempSensor.getLastReadTime();
+
+// Check if cached reading is available
+if (!isnan(cachedTemp)) {
+    unsigned long age = (millis() - readTime) / 1000; // seconds since reading
+    Serial.printf("Cached temperature: %.1f°F (%lus old)\n", cachedTemp, age);
+}
+```
+
+### Periodic Monitoring Example
+
+````cpp
+void loop() {
+    static unsigned long lastReading = 0;
+    static const unsigned long POLL_INTERVAL = 2 * 60 * 1000; // 2 minutes
+
+    unsigned long now = millis();
+
+    // Take new reading every 2 minutes
+    if (now - lastReading >= POLL_INTERVAL) {
+        if (!tempSensor.getAwakeStatus()) {
+            tempSensor.wakeUp();
+            delay(10); // Allow stabilization
+        }
+
+        float temp = tempSensor.readTemperatureFahrenheit();
+        lastReading = now;
+
+        Serial.printf("New reading: %.1f°F\n", temp);
+
+        // Put back to sleep for power savings
+        tempSensor.shutdown();
+    } else {
+        // Use cached reading for display
+        float cachedTemp = tempSensor.getLastTemperatureF();
+        if (!isnan(cachedTemp)) {
+            unsigned long age = (now - tempSensor.getLastReadTime()) / 1000;
+            Serial.printf("Cached: %.1f°F (%lus ago)\n", cachedTemp, age);
+        }
+    }
+
+    delay(1000);
+}
+
 ### Multiple Sensors
 
 ```cpp
@@ -100,7 +158,7 @@ void loop() {
                   indoorTemp, outdoorTemp);
     delay(1000);
 }
-```
+````
 
 ### I2C Address Configuration
 
@@ -131,11 +189,16 @@ The old Grove Temperature Sensor methods are no longer available:
 
 - ❌ `setSensorPin(pin)` - No longer needed (uses I2C)
 - ❌ `getSensorPin()` - No longer needed
-- ✅ `readTemperature()` - Still available
-- ✅ `readTemperatureFahrenheit()` - Still available
+- ✅ `readTemperature()` - Still available (now caches result)
+- ✅ `readTemperatureFahrenheit()` - Still available (now caches result)
 - ✅ `readTemperatureKelvin()` - Still available
 - ✅ `isValidReading(temp)` - Still available
 - ✅ `setup()` - Now returns bool for success/failure
+- ✨ `getLastTemperatureC()` - **New**: Get cached Celsius reading
+- ✨ `getLastTemperatureF()` - **New**: Get cached Fahrenheit reading
+- ✨ `getLastReadTime()` - **New**: Get timestamp of last sensor read
+- ✨ `getAwakeStatus()` - **New**: Check if sensor is awake
+- ✨ `wakeUp()`/`shutdown()` - **New**: Manual power management
 
 ## Error Handling
 
