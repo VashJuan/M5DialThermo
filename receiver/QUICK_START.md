@@ -77,6 +77,7 @@ pio device monitor
 ```
 
 Expected output:
+
 ```
 ====================================
 Thermostat Receiver Starting...
@@ -97,6 +98,7 @@ Safety timeout: 10 minutes
 ### 2. Enhanced Features
 
 **Power Management:**
+
 - Automatic low power mode (21µA sleep current)
 - Signal quality monitoring every 5 minutes
 - Enhanced command timing and reliability
