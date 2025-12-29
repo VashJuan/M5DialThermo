@@ -200,6 +200,7 @@ void setup()
     
     String now = rtc.getFormattedTime();
     Serial.println("Setup done at " + now);
+    Serial.println();
     display.showText(TIME, now);
 
     // Clear status area for normal operation
@@ -212,7 +213,8 @@ void setup()
 
     // Note: M5Dial encoder interrupts may be handled internally by M5.Encoder
     // If not, you would attach to GPIO40 and GPIO41
-    Serial.println("Interrupts configured for responsive input");
+    Serial.println("Interrupts configured for responsive input\n");
+    
     yield(); // Feed watchdog
 }
 

@@ -336,7 +336,28 @@ void RTC::update() {
     {
         auto tm = localtime(&t); // for local timezone.
         String currentTimezone = fallbackTimezone.length() > 0 ? fallbackTimezone : String(ntpConfig.timezone);
-        Serial.println("ESP32 " + currentTimezone + ":" + formatTime(tm));
+        
+        // Show a more user-friendly timezone label for common zones
+        String displayTimezone = currentTimezone;
+        if (currentTimezone.startsWith("PST8PDT")) {
+            displayTimezone = "PST/PDT";
+        } else if (currentTimezone.startsWith("EST5EDT")) {
+            displayTimezone = "EST/EDT";
+        } else if (currentTimezone.startsWith("MST7MDT")) {
+            displayTimezone = "MST/MDT";
+        } else if (currentTimezone.startsWith("CST6CDT")) {
+            displayTimezone = "CST/CDT";
+        } else if (currentTimezone == "UTC-8") {
+            displayTimezone = "PST";
+        } else if (currentTimezone == "UTC-5") {
+            displayTimezone = "EST";
+        } else if (currentTimezone == "UTC-7") {
+            displayTimezone = "MST";
+        } else if (currentTimezone == "UTC-6") {
+            displayTimezone = "CST";
+        }
+        
+        Serial.println("ESP32 Local " + displayTimezone + ":" + formatTime(tm));
     }
 
     Serial.println("RTC update end\n");
@@ -366,11 +387,11 @@ String RTC::getFormattedTime(bool includeWeekday) {
     }
     
     // Debug: Print timezone and raw time info
-    Serial.printf("Debug: Using timezone: %s\n", currentTimezone.c_str());
+    // Serial.printf("Debug: Using timezone: %s\n", currentTimezone.c_str());
     
-    // Add timezone suffix to indicate what timezone we're showing
+    // Return properly formatted local time without confusing timezone suffix
     String timeStr = formatTime(&timeinfo, includeWeekday);
-    return timeStr + " (" + currentTimezone + ")";
+    return timeStr;
 }
 
 time_t RTC::getCurrentTime() {
