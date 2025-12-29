@@ -145,6 +145,12 @@ private:
      */
     bool testDNSConnectivity();
 
+    /**
+     * @brief Report HTTP error codes with descriptive messages
+     * @param errorCode HTTP error code to report
+     */
+    void reportHTTPError(int errorCode);
+
 public:
     /**
      * @brief Constructor with default configuration

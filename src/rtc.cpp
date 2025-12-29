@@ -50,39 +50,69 @@ RTC::~RTC() {
 bool RTC::connectToWiFi() {
     Serial.println("Connecting to WiFi...");
     
-    // Disconnect any previous connections
+    // Disconnect any previous connections and reset WiFi completely
     WiFi.disconnect(true);
-    delay(100);
+    WiFi.mode(WIFI_OFF);
+    delay(500); // Longer delay for complete reset
+    yield();
     
     // Configure WiFi with improved settings
     WiFi.mode(WIFI_STA);
-    WiFi.setAutoReconnect(true);
+    WiFi.setAutoReconnect(false); // Disable auto-reconnect for manual control
     WiFi.setSleep(false); // Disable WiFi sleep for better reliability
+    WiFi.setTxPower(WIFI_POWER_19_5dBm); // Set maximum power for better range
     
-    // Configure DNS servers for better connectivity
-    WiFi.config(INADDR_NONE, INADDR_NONE, INADDR_NONE, IPAddress(8, 8, 8, 8), IPAddress(1, 1, 1, 1));
+    // Configure DNS servers - try different combinations for better reliability
+    WiFi.config(INADDR_NONE, INADDR_NONE, INADDR_NONE, IPAddress(75, 75, 75, 75), IPAddress(75, 75, 76, 76));
     
     Serial.printf("Connecting to SSID: %s\n", wifiConfig.ssid);
-    WiFi.begin(wifiConfig.ssid, wifiConfig.password);
+    Serial.printf("Using DNS servers: 75.75.75.75, 75.75.76.76\n");
     
-    // Reduced timeout to respect watchdog timer (10 seconds max)
-    int maxAttempts = 40; // 40 * 250ms = 10 seconds
-    unsigned long startTime = millis();
+    // Try connection with retries
+    int connectionAttempts = 2;
+    bool connected = false;
     
-    while (WiFi.status() != WL_CONNECTED && maxAttempts > 0) {
-        Serial.print('.');
-        delay(200); // Reduced delay
-        yield(); // Feed watchdog
-        maxAttempts--;
+    for (int attempt = 1; attempt <= connectionAttempts && !connected; attempt++) {
+        Serial.printf("Connection attempt %d/%d...\n", attempt, connectionAttempts);
         
-        // Additional safety check for total time
-        if (millis() - startTime > 10000) {
-            Serial.println("\nWiFi connection timeout (10s)");
-            break;
+        WiFi.begin(wifiConfig.ssid, wifiConfig.password);
+        
+        // Wait for connection with shorter individual timeout
+        int maxAttempts = 25; // 25 * 400ms = 10 seconds per attempt
+        unsigned long startTime = millis();
+        
+        while (WiFi.status() != WL_CONNECTED && maxAttempts > 0) {
+            Serial.print('.');
+            delay(400); // Slightly longer individual delay
+            yield(); // Feed watchdog
+            maxAttempts--;
+            
+            // Check connection status periodically
+            if (maxAttempts % 5 == 0) {
+                wl_status_t status = WiFi.status();
+                if (status == WL_CONNECT_FAILED) {
+                    Serial.printf("\nConnection failed (wrong password?) - status: %d\n", status);
+                    break;
+                } else if (status == WL_NO_SSID_AVAIL) {
+                    Serial.printf("\nSSID not found - status: %d\n", status);
+                    break;
+                }
+                yield();
+            }
+            
+            // Additional safety check for total time per attempt
+            if (millis() - startTime > 12000) {
+                Serial.printf("\nConnection attempt %d timeout (12s)\n", attempt);
+                break;
+            }
         }
         
-        // Feed watchdog more frequently
-        if (maxAttempts % 5 == 0) {
+        if (WiFi.status() == WL_CONNECTED) {
+            connected = true;
+        } else if (attempt < connectionAttempts) {
+            Serial.printf("\nAttempt %d failed, retrying...\n", attempt);
+            WiFi.disconnect();
+            delay(2000); // Wait between attempts
             yield();
         }
     }
@@ -109,28 +139,35 @@ bool RTC::synchronizeNTP() {
     unsigned long startTime = millis(); // Track timing for timeout
     Serial.println("Synchronizing with NTP...");
     
-    // Test DNS connectivity first
+    // Test DNS connectivity first with multiple servers
     if (!testDNSConnectivity()) {
         Serial.println("DNS connectivity test failed");
         return false;
     }
+    
+    // Try different NTP server combinations for better reliability
+    const char* alternateSvr1 = "time.google.com";
+    const char* alternateSvr2 = "time.cloudflare.com";
+    const char* alternateSvr3 = "time.nist.gov";
     
     Serial.printf("Using NTP servers: %s, %s, %s\n", ntpConfig.server1, ntpConfig.server2, ntpConfig.server3);
     Serial.printf("Timezone: %s\n", ntpConfig.timezone);
     
     // Stop any existing SNTP to restart fresh
     sntp_stop();
-    delay(500); // Longer delay to ensure clean stop
+    delay(1000); // Longer delay to ensure clean stop
     yield();
     
     Serial.println("Configuring SNTP with timezone and servers...");
     
-    // Configure timezone and servers
+    // Try primary servers first
     configTzTime(ntpConfig.timezone, ntpConfig.server1, ntpConfig.server2, ntpConfig.server3);
     
-    // Wait for initial configuration with shorter polling
-    delay(2000); // Increased delay for better initialization
-    int maxAttempts = 40; // 40 * 250ms = 10 seconds max (reduced from 15)
+    // Wait for initial configuration
+    delay(3000); // Longer initial wait
+    yield();
+    
+    int maxAttempts = 30; // 30 * 500ms = 15 seconds max
     
     // Check initial status
     sntp_sync_status_t initial_status = sntp_get_sync_status();
@@ -138,9 +175,19 @@ bool RTC::synchronizeNTP() {
     
     if (initial_status == SNTP_SYNC_STATUS_RESET) {
         Serial.println("Warning: SNTP not starting - may indicate network issues");
-        // Try a shorter initialization timeout
+        Serial.println("Trying alternate NTP servers...");
+        
+        // Stop and reconfigure with alternate servers
+        sntp_stop();
         delay(1000);
         yield();
+        
+        configTzTime(ntpConfig.timezone, alternateSvr1, alternateSvr2, alternateSvr3);
+        delay(2000);
+        yield();
+        
+        initial_status = sntp_get_sync_status();
+        Serial.printf("SNTP status with alternate servers: %d\n", initial_status);
     }
     
     while (sntp_get_sync_status() != SNTP_SYNC_STATUS_COMPLETED && maxAttempts > 0) {
@@ -869,17 +916,54 @@ bool RTC::detectTimezoneFromLocation() {
     yield(); // Feed watchdog after DNS
     
     HTTPClient http;
-    http.begin("http://worldtimeapi.org/api/ip");
-    http.setTimeout(10000); // Reduced to 10 second timeout
+    
+    // Try multiple approaches for better connectivity
+    bool httpSuccess = false;
+    String payload = "";
+    
+    // First try with IP address directly to bypass potential DNS routing issues
+    Serial.printf("Attempting direct IP connection to %s...\n", serverIP.toString().c_str());
+    http.begin("http://" + serverIP.toString() + "/api/ip");
+    http.setTimeout(5000); // Shorter timeout for first attempt
+    http.addHeader("Host", "worldtimeapi.org"); // Add proper host header
+    http.setUserAgent("M5Stack-ESP32/1.0"); // Identify our device
     
     yield(); // Feed watchdog before HTTP request
     int httpResponseCode = http.GET();
     yield(); // Feed watchdog after HTTP request
     
     if (httpResponseCode == 200) {
-        String payload = http.getString();
-        http.end(); // Close connection immediately
+        payload = http.getString();
+        httpSuccess = true;
+        Serial.println("Timezone detection successful via direct IP");
+    } else {
+        Serial.printf("Direct IP connection failed: %d\n", httpResponseCode);
+        reportHTTPError(httpResponseCode);
+        http.end();
         
+        // Fallback: Try with domain name
+        Serial.println("Trying domain name connection...");
+        http.begin("http://worldtimeapi.org/api/ip");
+        http.setTimeout(8000); // Longer timeout for second attempt
+        http.setUserAgent("M5Stack-ESP32/1.0");
+        
+        yield(); // Feed watchdog
+        httpResponseCode = http.GET();
+        yield(); // Feed watchdog
+        
+        if (httpResponseCode == 200) {
+            payload = http.getString();
+            httpSuccess = true;
+            Serial.println("Timezone detection successful via domain name");
+        } else {
+            Serial.printf("Domain name connection also failed: %d\n", httpResponseCode);
+            reportHTTPError(httpResponseCode);
+        }
+    }
+    
+    http.end(); // Always close the connection
+    
+    if (httpSuccess && payload.length() > 0) {
         // Parse JSON response with smaller buffer
         JsonDocument doc;
         DeserializationError error = deserializeJson(doc, payload);
@@ -912,21 +996,134 @@ bool RTC::detectTimezoneFromLocation() {
             Serial.println("Invalid timezone data received from API");
         }
     } else {
-        Serial.printf("HTTP request failed: %d\n", httpResponseCode);
-        if (httpResponseCode == -1) {
-            Serial.println("Error: Connection refused or DNS lookup failed");
-        } else if (httpResponseCode == -5) {
-            Serial.println("Error: TCP connection failed or network unreachable");
-        } else if (httpResponseCode == -11) {
-            Serial.println("Error: Read timeout");
-        } else if (httpResponseCode > 0) {
-            Serial.printf("HTTP Error: %d\n", httpResponseCode);
-        }
+        Serial.println("All HTTP connection attempts failed");
+        Serial.println("Possible network issues:");
+        Serial.println("- Firewall blocking HTTP traffic");
+        Serial.println("- NAT/Router configuration issues");
+        Serial.println("- ISP blocking worldtimeapi.org");
+        Serial.println("- Network connectivity problems");
         Serial.println("Continuing with default timezone configuration...");
     }
     
-    http.end();
     return false;
+}
+
+void RTC::reportHTTPError(int errorCode) {
+    switch (errorCode) {
+        case -1:
+            Serial.println("  -> Connection refused or DNS lookup failed");
+            break;
+        case -2:
+            Serial.println("  -> Send header failed");
+            break;
+        case -3:
+            Serial.println("  -> Send payload failed");
+            break;
+        case -4:
+            Serial.println("  -> Not connected");
+            break;
+        case -5:
+            Serial.println("  -> Connection lost or TCP connection failed");
+            break;
+        case -6:
+            Serial.println("  -> No stream");
+            break;
+        case -7:
+            Serial.println("  -> No HTTP server");
+            break;
+        case -8:
+            Serial.println("  -> Too less RAM");
+            break;
+        case -9:
+            Serial.println("  -> Encoding error");
+            break;
+        case -10:
+            Serial.println("  -> Stream write error");
+            break;
+        case -11:
+            Serial.println("  -> Read timeout");
+            break;
+        case 400:
+            Serial.println("  -> Bad Request");
+            break;
+        case 401:
+            Serial.println("  -> Unauthorized");
+            break;
+        case 403:
+            Serial.println("  -> Forbidden");
+            break;
+        case 404:
+            Serial.println("  -> Not Found");
+            break;
+        case 500:
+            Serial.println("  -> Internal Server Error");
+            break;
+        case 503:
+            Serial.println("  -> Service Unavailable");
+            break;
+        default:
+            Serial.printf("  -> Unknown HTTP error: %d\n", errorCode);
+            break;
+    }
+}
+
+void RTC::reportHTTPError(int errorCode) {
+    switch (errorCode) {
+        case -1:
+            Serial.println("  -> Connection refused or DNS lookup failed");
+            break;
+        case -2:
+            Serial.println("  -> Send header failed");
+            break;
+        case -3:
+            Serial.println("  -> Send payload failed");
+            break;
+        case -4:
+            Serial.println("  -> Not connected");
+            break;
+        case -5:
+            Serial.println("  -> Connection lost or TCP connection failed");
+            break;
+        case -6:
+            Serial.println("  -> No stream");
+            break;
+        case -7:
+            Serial.println("  -> No HTTP server");
+            break;
+        case -8:
+            Serial.println("  -> Too less RAM");
+            break;
+        case -9:
+            Serial.println("  -> Encoding error");
+            break;
+        case -10:
+            Serial.println("  -> Stream write error");
+            break;
+        case -11:
+            Serial.println("  -> Read timeout");
+            break;
+        case 400:
+            Serial.println("  -> Bad Request");
+            break;
+        case 401:
+            Serial.println("  -> Unauthorized");
+            break;
+        case 403:
+            Serial.println("  -> Forbidden");
+            break;
+        case 404:
+            Serial.println("  -> Not Found");
+            break;
+        case 500:
+            Serial.println("  -> Internal Server Error");
+            break;
+        case 503:
+            Serial.println("  -> Service Unavailable");
+            break;
+        default:
+            Serial.printf("  -> Unknown HTTP error: %d\n", errorCode);
+            break;
+    }
 }
 
 String RTC::convertToESP32Timezone(const String& utcOffset, const String& timezoneName) {
