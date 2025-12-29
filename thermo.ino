@@ -248,7 +248,7 @@ void loop()
     bool stoveOn = updateStove(curTemp, hourOfWeek);
 
     // Save battery power with display-friendly approach
-    // Use CPU frequency scaling and WiFi sleep instead of deep sleep
+    // Use CPU frequency scaling and WiFi/Temp Sensor sleep instead of deep sleep
     static bool powerSaveMode = false;
 
     if (millis() - lastActivityTime > activityTimeout)
@@ -256,8 +256,9 @@ void loop()
         if (!powerSaveMode)
         {
             setCpuFrequencyMhz(40); // Further reduce CPU frequency when idle
+            tempSensor.shutdown();  // Shutdown sensor during idle periods
             powerSaveMode = true;
-            Serial.println(String(loopCounter++) + ") Entering power save mode (CPU 40MHz)");
+            Serial.println(String(loopCounter++) + ") Entering power save mode (CPU 40MHz, sensor shutdown)");
         }
     }
     else
@@ -265,19 +266,14 @@ void loop()
         if (powerSaveMode)
         {
             setCpuFrequencyMhz(80); // Return to normal power saving frequency
+            tempSensor.wakeUp();    // Wake up sensor when activity resumes
             powerSaveMode = false;
-            Serial.println("Exiting power save mode (CPU 80MHz)");
+            Serial.println("Exiting power save mode (CPU 80MHz, sensor active)");
         }
     }
 
-    Serial.println("Stove is " + String(stoveOn ? "ON" : "OFF"));
-    display.showText(STOVE, "Stove: " + String(stoveOn ? "ON" : "OFF"));
-
-    // Let the physical stove know whether to be on or off
-    // Send the status via port B on the M5Dial which uses the Seeed Studio LoRa-E5-HF module (STM32WLE5JC) using UART
+    // Note: stove status display is handled inside updateStove()
     M5Dial.PortB.write(stoveOn ? 1 : 0);
 
-    tempSensor.shutdown();
     delay(100); // Short delay to prevent excessive looping, interrupts still responsive
-    tempSensor.wakeUp();
 }
