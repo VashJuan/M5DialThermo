@@ -114,18 +114,18 @@ public:
      * Displays current time from RTC and ESP32 internal timer
      */
     void update();
+    /**
+     * @brief Get formatted time as a string
+     * @param includeWeekday Include the weekday in the formatted string
+     * @return Formatted time string
+     */
+    String getFormattedTime(bool includeWeekday = true);
 
     /**
      * @brief Get current time from system
      * @return time_t Current time, or 0 if failed
      */
     time_t getCurrentTime();
-
-    /**
-     * @brief Get RTC date and time
-     * @return M5.RTC_DateTimeType RTC date and time structure
-     */
-    auto getRTCDateTime() -> decltype(M5Dial.Rtc.getDateTime());
 
     /**
      * @brief Set RTC date and time manually

@@ -140,7 +140,7 @@ void RTC::update() {
     }
 
     Serial.println("RTC update start");
-    delay(500);
+    delay(50);
 
     auto dt = M5Dial.Rtc.getDateTime();
     Serial.printf("RTC   UTC  :%04d/%02d/%02d (%s)  %02d:%02d:%02d\r\n",
@@ -152,20 +152,24 @@ void RTC::update() {
     auto t = time(nullptr);
     {
         auto tm = gmtime(&t); // for UTC.
-        Serial.printf("ESP32 UTC  :%04d/%02d/%02d (%s)  %02d:%02d:%02d\r\n",
-                      tm->tm_year + 1900, tm->tm_mon + 1, tm->tm_mday,
-                      weekdays[tm->tm_wday], tm->tm_hour, tm->tm_min, tm->tm_sec);
+        Serial.println("ESP32 UTC  :" + formatTime(tm));
     }
 
     {
         auto tm = localtime(&t); // for local timezone.
-        Serial.printf("ESP32 %s:%04d/%02d/%02d (%s)  %02d:%02d:%02d\r\n",
-                      ntpConfig.timezone, tm->tm_year + 1900, tm->tm_mon + 1,
-                      tm->tm_mday, weekdays[tm->tm_wday], tm->tm_hour, tm->tm_min,
-                      tm->tm_sec);
+        Serial.println("ESP32 " + String(ntpConfig.timezone) + ":" + formatTime(tm));
     }
 
     Serial.println("RTC update end");
+}
+
+String RTC::getFormattedTime(bool includeWeekday) {
+    time_t now = getCurrentTime();
+    struct tm timeinfo;
+    if (!getLocalTime(&timeinfo)) {
+        return "Time unavailable";
+    }
+    return formatTime(&timeinfo, includeWeekday);
 }
 
 time_t RTC::getCurrentTime() {
@@ -177,10 +181,6 @@ time_t RTC::getCurrentTime() {
     }
     time(&now);
     return now;
-}
-
-auto RTC::getRTCDateTime() -> decltype(M5Dial.Rtc.getDateTime()) {
-    return M5Dial.Rtc.getDateTime();
 }
 
 void RTC::setDateTime(const m5::rtc_datetime_t& dateTime) {
@@ -205,16 +205,21 @@ void RTC::setNTPConfig(const char* timezone, const char* server1,
 }
 
 String RTC::formatTime(const struct tm* t, bool includeWeekday) {
+    struct tm timeinfo;
+    const struct tm* timePtr;
+
+        timePtr = t;
+    
     String formatted;
     if (includeWeekday) {
-        formatted = String(weekdays[t->tm_wday]) + " ";
+        formatted = String(weekdays[timePtr->tm_wday]) + " ";
     }
-    formatted += String(t->tm_year + 1900) + "/" + 
-                String(t->tm_mon + 1) + "/" + 
-                String(t->tm_mday) + " " +
-                String(t->tm_hour) + ":" + 
-                String(t->tm_min) + ":" + 
-                String(t->tm_sec);
+    formatted += String(timePtr->tm_year + 1900) + "/" + 
+                String(timePtr->tm_mon + 1) + "/" + 
+                String(timePtr->tm_mday) + " " +
+                String(timePtr->tm_hour) + ":" + 
+                String(timePtr->tm_min) + ":" + 
+                String(timePtr->tm_sec);
     return formatted;
 }
 

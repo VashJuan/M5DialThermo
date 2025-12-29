@@ -89,7 +89,7 @@ void Stove::setRelayState(bool on)
     Serial.printf("Relay set to: %s\n", on ? "ON" : "OFF");
 }
 
-String Stove::update(TemperatureSensor& tempSensor, RTC& rtc)
+String Stove::update(float currentTemp, int hourOfWeek)
 {
     String status = "";
     static unsigned long loopCounter = 0;
@@ -98,17 +98,9 @@ String Stove::update(TemperatureSensor& tempSensor, RTC& rtc)
         Serial.println("Stove: not enabled");
         return "Stove: not enabled";
     }
-    
-    // Get current temperature
-    float currentTemp = tempSensor.readTemperatureFahrenheit();
-    
-    if (!tempSensor.isValidReading(currentTemp)) {
-        Serial.println("Stove: Invalid temperature reading, maintaining current state");
-        return "Stove: Invalid temperature reading";
-    }
-    
+        
     // Get desired temperature for current time
-    float desiredTemp = getDesiredTemperature(rtc);
+    float desiredTemp = getDesiredTemperature(hourOfWeek);
     
     // Calculate temperature difference
     float tempDiff = desiredTemp - currentTemp;
@@ -191,9 +183,8 @@ StoveState Stove::getState() const
     return currentState;
 }
 
-float Stove::getDesiredTemperature(RTC& rtc)
-{
-    int currentHour = getCurrentHour(rtc);
+float Stove::getDesiredTemperature(int currentHour)
+{    
     float adjustment = getTemperatureAdjustment(currentHour);
     return baseTemperature + adjustment;
 }
