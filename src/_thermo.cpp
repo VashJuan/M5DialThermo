@@ -126,18 +126,22 @@ void setup()
 
     display.setup();
     display.showSplashScreen();
+    yield(); // Feed watchdog
 
     Serial.print("Setting up encoder...");
     display.showText(TIME, "Setting up (encoder) dial...");
     delay(250);
+    yield(); // Feed watchdog
     encoder.setup();
 
     Serial.println(" and RTC...");
     display.showText(TIME, "Setting up real time clock...");
     delay(250);
+    yield(); // Feed watchdog
     rtc.setup();
 
     // Initialize temperature sensor
+    yield(); // Feed watchdog
     if (!tempSensor.setup())
     {
         Serial.println("Failed to initialize temperature sensor!");
@@ -151,9 +155,11 @@ void setup()
     }
 
     // Initialize stove control (loads configuration from temps.csv)
+    yield(); // Feed watchdog
     Serial.println("Setting up stove control...");
     display.showText(STATUS_AREA, "Setting up stove control...");
     delay(250);
+    yield(); // Feed watchdog
     stove.setup();
 
     String now = rtc.getFormattedTime();
@@ -168,6 +174,7 @@ void setup()
     // Note: M5Dial encoder interrupts may be handled internally by M5.Encoder
     // If not, you would attach to GPIO40 and GPIO41
     Serial.println("Interrupts configured for responsive input");
+    yield(); // Feed watchdog
 }
 
 static uint32_t lastActivityTime = millis();
@@ -225,6 +232,7 @@ void loop()
     static long loopCounter = 0;
     // bool touch_wakeup = true; // Whether to enable touch screen wake-up
 
+    yield(); // Feed watchdog at start of loop
     M5.update();
     // encoder.update();
 
@@ -235,9 +243,12 @@ void loop()
     // Skip stove control if time is not yet available
     if (hourOfWeek < 0) {
         Serial.println("Waiting for RTC initialization...");
-        delay(1000);
+        delay(100); // Reduced from 1000ms
+        yield(); // Feed watchdog
         return;
     }
+
+    yield(); // Feed watchdog before handlers
 
     // Handle encoder changes (interrupt-driven)
     if (encoderChanged)
@@ -253,7 +264,7 @@ void loop()
     {
         buttonPressed = false; // Clear flag
         M5.Speaker.tone(8000, 20);
-        delay(250);
+        // Removed blocking delay
 
         // Request manual toggle through updateStove function
         updateStove(curTemp, hourOfWeek, true);
@@ -265,7 +276,7 @@ void loop()
     {
         buttonReleased = false; // Clear flag
         M5.Speaker.tone(12000, 20);
-        delay(500);
+        // Removed blocking delay
         // Note: noteActivity() already called in ISR
     }
 
@@ -304,5 +315,6 @@ void loop()
         Serial.println(String(loopCounter) + ") Stove control: " + (stoveOn ? "ON" : "OFF"));
     }
 
+    yield(); // Feed watchdog before delay
     delay(100); // Short delay to prevent excessive looping, interrupts still responsive
 }

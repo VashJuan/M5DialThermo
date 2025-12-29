@@ -52,9 +52,10 @@ bool RTC::connectToWiFi() {
     
     WiFi.begin(wifiConfig.ssid, wifiConfig.password);
     int attempts = 0;
-    while (WiFi.status() != WL_CONNECTED && attempts < 500) {
+    while (WiFi.status() != WL_CONNECTED && attempts < 100) { // Reduced from 500
         Serial.print('.');
-        delay(500);
+        delay(100); // Reduced from 500ms
+        yield(); // Feed watchdog
         attempts++;
     }
     
@@ -69,7 +70,7 @@ bool RTC::connectToWiFi() {
 
 // https://en.wikipedia.org/wiki/Network_Time_Protocol
 bool RTC::synchronizeNTP() {
-    const int MAX_NTP_ATTEMPTS = 1000;
+    const int MAX_NTP_ATTEMPTS = 50; // Reduced from 1000
     Serial.println("Synchronizing with NTP...");
     
     configTzTime(ntpConfig.timezone, ntpConfig.server1, ntpConfig.server2, ntpConfig.server3);
@@ -78,7 +79,8 @@ bool RTC::synchronizeNTP() {
     int attempts = 0;
     while (sntp_get_sync_status() != SNTP_SYNC_STATUS_COMPLETED && attempts < MAX_NTP_ATTEMPTS) {
         Serial.print('.');
-        delay(1000);
+        delay(200); // Reduced from 1000ms
+        yield(); // Feed watchdog
         attempts++;
     }
     
@@ -87,15 +89,17 @@ bool RTC::synchronizeNTP() {
         return false;
     }
 #else
-    delay(1600);
+    delay(500); // Reduced from 1600ms
+    yield(); // Feed watchdog
     struct tm timeInfo;
     int attempts = 0;
-    while (!getLocalTime(&timeInfo, 1000) && attempts < 10) {
+    while (!getLocalTime(&timeInfo, 500) && attempts < 5) { // Reduced attempts from 10
         Serial.print('.');
+        yield(); // Feed watchdog
         attempts++;
     }
     
-    if (attempts >= 10) {
+    if (attempts >= 5) {
         Serial.println("\r\n NTP Synchronization Failed.");
         return false;
     }
@@ -105,7 +109,9 @@ bool RTC::synchronizeNTP() {
     
     // Set RTC time
     time_t t = time(nullptr) + 1; // Advance one second.
-    while (t > time(nullptr)); // Synchronization in seconds
+    while (t > time(nullptr)) {
+        yield(); // Feed watchdog during wait
+    }
     M5.Rtc.setDateTime(gmtime(&t));
     
     return true;
@@ -121,38 +127,30 @@ bool RTC::setup() {
 
     Serial.println("RTC found.");
     
-    // Connect to WiFi
+    // Connect to WiFi with shorter timeout
     if (!connectToWiFi()) {
-        Serial.println("WiFi connection failed, attempting fallback timezone setup...");
+        Serial.println("WiFi connection failed, using fallback timezone...");
         return setupWithFallbackTimezone();
     }
     
-    // Try to detect timezone automatically first
-    bool timezoneDetected = detectTimezoneFromLocation();
-    if (!timezoneDetected) {
-        Serial.println("Automatic timezone detection failed, using configured timezone");
-        // Explicitly configure the default timezone to ensure it's set
-        configTzTime(ntpConfig.timezone, ntpConfig.server1, ntpConfig.server2, ntpConfig.server3);
-    }
+    // Skip automatic timezone detection for now to avoid blocking
+    Serial.println("Skipping automatic timezone detection to avoid watchdog timeout");
+    Serial.println("Using configured default timezone");
     
-    // Synchronize with NTP (timezone should already be configured)
+    // Configure timezone (use default)
+    configTzTime(ntpConfig.timezone, ntpConfig.server1, ntpConfig.server2, ntpConfig.server3);
+    delay(100);
+    yield(); // Feed watchdog
+    
+    // Try NTP sync with shorter timeout
     if (!synchronizeNTP()) {
-        Serial.println("NTP synchronization failed, attempting fallback timezone setup...");
+        Serial.println("NTP sync failed, using fallback timezone...");
         WiFi.disconnect();
         return setupWithFallbackTimezone();
     }
     
-    // Final validation that timezone is working
-    struct tm timeinfo;
-    if (getLocalTime(&timeinfo)) {
-        Serial.printf("RTC setup complete. Local time: %s\n", formatTime(&timeinfo).c_str());
-        Serial.printf("Using timezone: %s\n", getCurrentTimezone().c_str());
-    } else {
-        Serial.println("Warning: RTC setup complete but getLocalTime() failed");
-    }
-    
     isInitialized = true;
-    Serial.println("RTC setup end");
+    Serial.println("RTC setup complete");
     return true;
 }
 
@@ -483,54 +481,41 @@ bool RTC::detectTimezoneFromLocation() {
     
     HTTPClient http;
     http.begin("http://worldtimeapi.org/api/ip");
-    http.setTimeout(10000); // 10 second timeout
+    http.setTimeout(5000); // Reduced to 5 second timeout
     
     int httpResponseCode = http.GET();
     
     if (httpResponseCode == 200) {
         String payload = http.getString();
+        http.end(); // Close connection immediately
         
-        // Parse JSON response
-        DynamicJsonDocument doc(1024);
+        // Parse JSON response with smaller buffer
+        DynamicJsonDocument doc(512); // Reduced buffer size
         DeserializationError error = deserializeJson(doc, payload);
         
         if (error) {
             Serial.printf("JSON parsing failed: %s\n", error.c_str());
-            http.end();
             return false;
         }
         
         // Extract timezone from response
-        String detectedTimezone = doc["timezone"];
-        String utcOffset = doc["utc_offset"];
+        const char* detectedTimezone = doc["timezone"];
+        const char* utcOffset = doc["utc_offset"];
         
-        if (detectedTimezone.length() > 0 && utcOffset.length() > 0) {
+        if (detectedTimezone && utcOffset) {
             // Convert to ESP32 timezone format
-            String espTimezone = convertToESP32Timezone(utcOffset, detectedTimezone);
+            String espTimezone = convertToESP32Timezone(String(utcOffset), String(detectedTimezone));
             
             if (espTimezone.length() > 0) {
-                Serial.printf("Detected timezone: %s (UTC%s)\n", detectedTimezone.c_str(), utcOffset.c_str());
+                Serial.printf("Detected timezone: %s (UTC%s)\n", detectedTimezone, utcOffset);
                 Serial.printf("Using ESP32 timezone: %s\n", espTimezone.c_str());
                 
                 // Update the NTP configuration with detected timezone
                 ntpConfig.timezone = espTimezone.c_str();
                 
-                // Configure the timezone immediately
-                configTzTime(ntpConfig.timezone, ntpConfig.server1, ntpConfig.server2, ntpConfig.server3);
-                delay(100); // Allow time for configuration to take effect
-                
-                // Validate that timezone was applied
-                struct tm timeinfo;
-                if (getLocalTime(&timeinfo)) {
-                    Serial.printf("Timezone detection successful: %s\n", espTimezone.c_str());
-                } else {
-                    Serial.println("Warning: Timezone detection succeeded but getLocalTime() failed");
-                }
-                
-                http.end();
-                return true;
+                return true; // Don't configure timezone here, do it in setup
             } else {
-                Serial.printf("Failed to convert timezone format: %s -> ESP32\n", utcOffset.c_str());
+                Serial.printf("Failed to convert timezone format: %s -> ESP32\n", utcOffset);
             }
         } else {
             Serial.println("Invalid timezone data received from API");
