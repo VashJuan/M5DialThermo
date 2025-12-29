@@ -223,6 +223,11 @@ volatile bool encoderChanged = false;
 volatile bool buttonPressed = false;
 volatile bool buttonReleased = false;
 
+// Debouncing variables for main loop
+static unsigned long lastButtonPressTime = 0;
+static unsigned long lastButtonReleaseTime = 0;
+static const unsigned long BUTTON_DEBOUNCE_MS = 150;
+
 // Interrupt Service Routines
 void IRAM_ATTR encoderISR()
 {
@@ -231,28 +236,14 @@ void IRAM_ATTR encoderISR()
 
 void IRAM_ATTR buttonPressISR()
 {
-    // Simple debounce check using interrupt time difference
-    static unsigned long lastInterruptTime = 0;
-    unsigned long interruptTime = millis();
-    
-    // Debounce: ignore if too soon after last interrupt
-    if (interruptTime - lastInterruptTime > 100) {
-        buttonPressed = true;
-        lastInterruptTime = interruptTime;
-    }
+    // Minimal ISR - only set flag
+    buttonPressed = true;
 }
 
 void IRAM_ATTR buttonReleaseISR()
 {
-    // Simple debounce check using interrupt time difference
-    static unsigned long lastInterruptTime = 0;
-    unsigned long interruptTime = millis();
-    
-    // Debounce: ignore if too soon after last interrupt
-    if (interruptTime - lastInterruptTime > 100) {
-        buttonReleased = true;
-        lastInterruptTime = interruptTime;
-    }
+    // Minimal ISR - only set flag
+    buttonReleased = true;
 }
 
 void noteActivity()
@@ -304,39 +295,53 @@ void loop()
         yield(); // Feed watchdog after encoder handling
     }
 
-    // Handle button press (interrupt-driven)
+    // Handle button press (interrupt-driven with main loop debouncing)
     if (buttonPressed)
     {
-        buttonPressed = false; // Clear flag immediately
-        
-        // Update activity tracking
-        recentActivity = true;
-        lastActivityTime = millis();
-        
-        // Safety: ensure we have valid temperature before processing
-        if (curTemp < 999.0) {
-            M5.Speaker.tone(8000, 20);
-            yield(); // Feed watchdog after tone
+        unsigned long currentTime = millis();
+        if (currentTime - lastButtonPressTime > BUTTON_DEBOUNCE_MS) {
+            buttonPressed = false; // Clear flag
+            lastButtonPressTime = currentTime;
             
-            // Request manual toggle through updateStove function
-            updateStove(curTemp, hourOfWeek, true);
-            yield(); // Feed watchdog after manual update
+            // Update activity tracking
+            recentActivity = true;
+            lastActivityTime = currentTime;
+            
+            // Safety: ensure we have valid temperature before processing
+            if (curTemp < 999.0) {
+                M5.Speaker.tone(8000, 20);
+                yield(); // Feed watchdog after tone
+                
+                // Request manual toggle through updateStove function
+                updateStove(curTemp, hourOfWeek, true);
+                yield(); // Feed watchdog after manual update
+            } else {
+                Serial.println("Button press ignored - invalid temperature reading");
+            }
         } else {
-            Serial.println("Button press ignored - invalid temperature reading");
+            // Too soon - clear flag without processing
+            buttonPressed = false;
         }
     }
 
-    // Handle button release (interrupt-driven)
+    // Handle button release (interrupt-driven with main loop debouncing)
     if (buttonReleased)
     {
-        buttonReleased = false; // Clear flag immediately
-        
-        // Update activity tracking
-        recentActivity = true;
-        lastActivityTime = millis();
-        
-        M5.Speaker.tone(12000, 20);
-        yield(); // Feed watchdog after tone
+        unsigned long currentTime = millis();
+        if (currentTime - lastButtonReleaseTime > BUTTON_DEBOUNCE_MS) {
+            buttonReleased = false; // Clear flag
+            lastButtonReleaseTime = currentTime;
+            
+            // Update activity tracking
+            recentActivity = true;
+            lastActivityTime = currentTime;
+            
+            M5.Speaker.tone(12000, 20);
+            yield(); // Feed watchdog after tone
+        } else {
+            // Too soon - clear flag without processing
+            buttonReleased = false;
+        }
     }
 
     // Update stove status (handles both manual and automatic modes)
