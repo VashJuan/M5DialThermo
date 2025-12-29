@@ -236,6 +236,9 @@ void setup()
     // Button handling will use M5.BtnA with efficient checking
     Serial.println("Using M5 built-in button handling for optimal responsiveness");
     
+    // Reset activity time so power save mode doesn't trigger immediately
+    lastActivityTime = millis();
+    
     yield(); // Feed watchdog
 }
 
