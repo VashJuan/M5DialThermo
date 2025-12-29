@@ -51,12 +51,12 @@ bool RTC::connectToWiFi() {
     Serial.println("Connecting to WiFi...");
     
     WiFi.begin(wifiConfig.ssid, wifiConfig.password);
-    int attempts = 0;
-    while (WiFi.status() != WL_CONNECTED && attempts < 400) { // Increased to 400 for better reliability
+    int maxAttempts = 500;
+    while (WiFi.status() != WL_CONNECTED && maxAttempts) {
         Serial.print('.');
-        delay(250); // Increased to 250ms for more stable connection
+        delay(250); 
         yield(); // Feed watchdog
-        attempts++;
+        maxAttempts--;
     }
     
     if (WiFi.status() == WL_CONNECTED) {
@@ -70,18 +70,17 @@ bool RTC::connectToWiFi() {
 
 // https://en.wikipedia.org/wiki/Network_Time_Protocol
 bool RTC::synchronizeNTP() {
-    const int MAX_NTP_ATTEMPTS = 100; // Increased from 50 for better reliability
     Serial.println("Synchronizing with NTP...");
     
     configTzTime(ntpConfig.timezone, ntpConfig.server1, ntpConfig.server2, ntpConfig.server3);
 
 #if SNTP_ENABLED
-    int attempts = 0;
-    while (sntp_get_sync_status() != SNTP_SYNC_STATUS_COMPLETED && attempts < MAX_NTP_ATTEMPTS) {
+    int maxAttempts = 500;
+    while (sntp_get_sync_status() != SNTP_SYNC_STATUS_COMPLETED && maxAttempts) {
         Serial.print('.');
         delay(250); // Increased to 250ms for more stable sync
         yield(); // Feed watchdog
-        attempts++;
+        maxAttempts--;
     }
     
     if (sntp_get_sync_status() != SNTP_SYNC_STATUS_COMPLETED) {
@@ -92,14 +91,14 @@ bool RTC::synchronizeNTP() {
     delay(500); // Reduced from 1600ms
     yield(); // Feed watchdog
     struct tm timeInfo;
-    int attempts = 0;
-    while (!getLocalTime(&timeInfo, 500) && attempts < 5) { // Reduced attempts from 10
+    int maxAttempts = 100;
+    while (!getLocalTime(&timeInfo, 500) && maxAttempts) {
         Serial.print('.');
         yield(); // Feed watchdog
-        attempts++;
+        maxAttempts--;
     }
     
-    if (attempts >= 5) {
+    if (maxAttempts <= 0) {
         Serial.println("\r\n NTP Synchronization Failed.");
         return false;
     }
@@ -107,12 +106,29 @@ bool RTC::synchronizeNTP() {
 
     Serial.println("\r\n NTP Connected.");
     
-    // Set RTC time
-    time_t t = time(nullptr) + 1; // Advance one second.
-    while (t > time(nullptr)) {
-        yield(); // Feed watchdog during wait
+    // Set RTC time with proper conversion
+    time_t now = time(nullptr);
+    struct tm *timeinfo = gmtime(&now);
+    
+    if (timeinfo) {
+        // Convert tm struct to M5 RTC datetime format
+        m5::rtc_datetime_t dt;
+        dt.date.year = timeinfo->tm_year + 1900;
+        dt.date.month = timeinfo->tm_mon + 1;
+        dt.date.date = timeinfo->tm_mday;
+        dt.date.weekDay = timeinfo->tm_wday;
+        dt.time.hours = timeinfo->tm_hour;
+        dt.time.minutes = timeinfo->tm_min;
+        dt.time.seconds = timeinfo->tm_sec;
+        
+        M5.Rtc.setDateTime(dt);
+        
+        Serial.printf("RTC hardware updated: %04d/%02d/%02d (%s) %02d:%02d:%02d UTC\n",
+                      dt.date.year, dt.date.month, dt.date.date,
+                      weekdays[dt.date.weekDay], dt.time.hours, dt.time.minutes, dt.time.seconds);
+    } else {
+        Serial.println("Warning: Failed to get time for RTC update");
     }
-    M5.Rtc.setDateTime(gmtime(&t));
     
     return true;
 }
@@ -171,6 +187,23 @@ void RTC::update() {
                   dt.date.year, dt.date.month, dt.date.date,
                   weekdays[dt.date.weekDay], dt.time.hours, dt.time.minutes,
                   dt.time.seconds);
+    
+    // Check if RTC time looks valid (not year 2000)
+    if (dt.date.year < 2020) {
+        Serial.println("Warning: RTC hardware appears to have invalid date (year < 2020)");
+        Serial.println("This may indicate RTC hardware synchronization failed");
+        
+        // Attempt automatic resync if ESP32 time is valid
+        time_t esp32Time = time(nullptr);
+        if (esp32Time > 1640000000) { // Check if ESP32 time looks reasonable (after 2022)
+            Serial.println("Attempting automatic RTC resynchronization...");
+            static unsigned long lastResyncAttempt = 0;
+            if (millis() - lastResyncAttempt > 30000) { // Don't spam resync attempts
+                lastResyncAttempt = millis();
+                forceRTCSync();
+            }
+        }
+    }
 
     /// ESP32 internal timer
     auto t = time(nullptr);
@@ -214,7 +247,7 @@ String RTC::getFormattedTime(bool includeWeekday) {
     // Debug: Print timezone and raw time info
     Serial.printf("Debug: Using timezone: %s\n", currentTimezone.c_str());
     Serial.printf("Debug: UTC time_t: %lu\n", (unsigned long)now);
-    Serial.printf("Debug: Local time from getLocalTime(): %04d/%02d/%02d %02d:%02d:%02d\n", 
+    Serial.printf("Debug: Local time from getLocalTime(): %04d/%02d/%02d %02d:%02d:%02d\n\n", 
                   timeinfo.tm_year + 1900, timeinfo.tm_mon + 1, timeinfo.tm_mday,
                   timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec);
     
@@ -291,6 +324,51 @@ String RTC::formatTime(const struct tm* t, bool includeWeekday) {
 
 bool RTC::isSystemInitialized() const {
     return isInitialized;
+}
+
+bool RTC::forceRTCSync() {
+    Serial.println("Forcing RTC hardware synchronization...");
+    
+    // Get current ESP32 time
+    time_t now = time(nullptr);
+    if (now == 0) {
+        Serial.println("Error: No valid time available for RTC sync");
+        return false;
+    }
+    
+    struct tm *timeinfo = gmtime(&now);
+    if (!timeinfo) {
+        Serial.println("Error: Failed to convert time for RTC sync");
+        return false;
+    }
+    
+    // Convert tm struct to M5 RTC datetime format (UTC)
+    m5::rtc_datetime_t dt;
+    dt.date.year = timeinfo->tm_year + 1900;
+    dt.date.month = timeinfo->tm_mon + 1;
+    dt.date.date = timeinfo->tm_mday;
+    dt.date.weekDay = timeinfo->tm_wday;
+    dt.time.hours = timeinfo->tm_hour;
+    dt.time.minutes = timeinfo->tm_min;
+    dt.time.seconds = timeinfo->tm_sec;
+    
+    // Set the RTC hardware
+    M5.Rtc.setDateTime(dt);
+    
+    Serial.printf("RTC hardware forcibly updated to: %04d/%02d/%02d (%s) %02d:%02d:%02d UTC\n",
+                  dt.date.year, dt.date.month, dt.date.date,
+                  weekdays[dt.date.weekDay], dt.time.hours, dt.time.minutes, dt.time.seconds);
+    
+    // Verify the update worked
+    delay(100);
+    auto verifyDt = M5.Rtc.getDateTime();
+    if (verifyDt.date.year >= 2020) {
+        Serial.println("RTC hardware sync verification: SUCCESS");
+        return true;
+    } else {
+        Serial.println("RTC hardware sync verification: FAILED");
+        return false;
+    }
 }
 
 int RTC::getHour() {

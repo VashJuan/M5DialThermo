@@ -237,6 +237,13 @@ public:
      * @return true if initialized
      */
     bool isSystemInitialized() const;
+
+    /**
+     * @brief Force resynchronization of RTC hardware with ESP32 time
+     * @return true if synchronization successful
+     */
+    bool forceRTCSync();
+
     /**
      * @brief Get current hour (0-23)
      * @return Current hour

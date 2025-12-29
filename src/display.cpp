@@ -11,6 +11,7 @@
 Display display;
 
 // Display layout constants
+// See https://docs.m5stack.com/en/arduino/m5gfx/m5gfx_appendix for options
 static const uint32_t BACKGROUND_COLOR = 0xFFB040;
 static const uint32_t CLEAR_COLOR = 0xBED500;
 
@@ -76,6 +77,7 @@ int Display::getAreaTextSize(DisplayArea area)
     }
 }
 
+// Real options are at: https://docs.m5stack.com/en/arduino/m5gfx/m5gfx_appendix#color
 uint32_t Display::getColorValue(TextColor color)
 {
     switch (color) {
@@ -83,6 +85,10 @@ uint32_t Display::getColorValue(TextColor color)
         case COLOR_RED:   return TFT_RED;
         case COLOR_WHITE: return TFT_WHITE;
         case COLOR_BLUE:  return TFT_BLUE;
+        case COLOR_GREEN: return TFT_GREEN;
+        case COLOR_YELLOW: return TFT_YELLOW;
+        case COLOR_CYAN: return TFT_CYAN;
+        case COLOR_MAGENTA: return TFT_MAGENTA;
         default:          return TFT_BLACK;
     }
 }

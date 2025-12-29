@@ -38,7 +38,11 @@ enum TextColor
     COLOR_BLACK = 0,
     COLOR_RED = 1,
     COLOR_WHITE = 2,
-    COLOR_BLUE = 3
+    COLOR_BLUE = 3,
+    COLOR_GREEN = 4,
+    COLOR_YELLOW = 5,
+    COLOR_CYAN = 6,
+    COLOR_MAGENTA = 7
 };
 
 /**

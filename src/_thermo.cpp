@@ -144,14 +144,14 @@ void setup()
     yield(); // Feed watchdog
     if (!tempSensor.setup())
     {
-        Serial.println("Failed to initialize temperature sensor!");
+        Serial.println("Failed to initialize temperature sensor!\n");
         display.showText(STATUS_AREA, "Temp Sensor Init Failed.", COLOR_RED);
         // Don't block - continue with other setup
     }
     else
     {
         Serial.printf("Temperature sensor initialized successfully at 0x%02X\n", tempSensor.getI2CAddress());
-        Serial.printf("Current resolution: %s\n", tempSensor.getResolutionString());
+        Serial.printf("Current resolution: %s\n\n", tempSensor.getResolutionString());
     }
 
     // Initialize stove control (loads configuration from temps.csv)
@@ -164,7 +164,7 @@ void setup()
 
     // Clear setup message and show ready status
     display.showText(STATUS_AREA, "System Ready", COLOR_WHITE);
-    delay(500); // Brief pause to show ready message
+    delay(750); // Brief pause to show ready message
     
     String now = rtc.getFormattedTime();
     Serial.println("Setup done at " + now);
