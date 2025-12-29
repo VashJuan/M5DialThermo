@@ -28,25 +28,25 @@ Display::~Display()
 void Display::setup()
 {
     // Get actual display dimensions
-    width = M5Dial.Display.width() == 0 ? 240 : M5Dial.Display.width();
-    height = M5Dial.Display.height() == 0 ? 240 : M5Dial.Display.height();
+    width = M5.Display.width() == 0 ? 240 : M5.Display.width();
+    height = M5.Display.height() == 0 ? 240 : M5.Display.height();
     centerX = width / 2;
     centerY = height / 2;
 
     // Initialize display settings
-    M5Dial.Display.setFont(&fonts::Font2);
-    M5Dial.Display.setTextDatum(middle_center);
+    M5.Display.setFont(&fonts::Font2);
+    M5.Display.setTextDatum(middle_center);
 }
 
 void Display::showSplashScreen()
 {
     Serial.println("\n\n------------------------------");
-    M5Dial.Display.clear();
-    M5Dial.Display.fillScreen(backgroundColor);
-    M5Dial.Display.setTextColor(TFT_BLACK);
-    M5Dial.Display.setTextSize(1);
+    M5.Display.clear();
+    M5.Display.fillScreen(backgroundColor);
+    M5.Display.setTextColor(TFT_BLACK);
+    M5.Display.setTextSize(1);
     
-    M5Dial.Display.drawCenterString("M5Dial Thermostat v 2.0.0", centerX, titleY);
+    M5.Display.drawCenterString("M5Dial Thermostat v 2.0.0", centerX, titleY);
     drawHorizontalLine(20, width - 20, titleY + 15, COLOR_BLUE);
     
     delay(50);
@@ -59,7 +59,7 @@ int Display::getAreaY(DisplayArea area)
         case TIME:   return timeY;
         case TEMP:   return tempY;
         case STOVE:  return stoveY;
-        case STATUS: return statusY;
+        case STATUS_AREA: return statusY;
         default:     return statusY;
     }
 }
@@ -71,7 +71,7 @@ int Display::getAreaTextSize(DisplayArea area)
         case TIME:   return 1;
         case TEMP:   return 2;  // Temperature should be larger
         case STOVE:  return 1;
-        case STATUS: return 1;
+        case STATUS_AREA: return 1;
         default:     return 1;
     }
 }
@@ -96,7 +96,7 @@ void Display::clearArea(DisplayArea area)
     // Use different clear color for time area for visual effect
     uint32_t clearColor = (area == TIME) ? CLEAR_COLOR : backgroundColor;
     
-    M5Dial.Display.fillRect(0, y - 2, width, clearHeight + 4, clearColor);
+    M5.Display.fillRect(0, y - 2, width, clearHeight + 4, clearColor);
 }
 
 void Display::showText(DisplayArea area, const String& text, TextColor color, bool clearFirst)
@@ -105,24 +105,24 @@ void Display::showText(DisplayArea area, const String& text, TextColor color, bo
         clearArea(area);
     }
     
-    M5Dial.Display.setTextColor(getColorValue(color));
-    M5Dial.Display.setTextSize(getAreaTextSize(area));
-    M5Dial.Display.drawCenterString(text, centerX, getAreaY(area));
+    M5.Display.setTextColor(getColorValue(color));
+    M5.Display.setTextSize(getAreaTextSize(area));
+    M5.Display.drawCenterString(text, centerX, getAreaY(area));
     
     // Reset to default color and size
-    M5Dial.Display.setTextColor(TFT_BLACK);
-    M5Dial.Display.setTextSize(1);
+    M5.Display.setTextColor(TFT_BLACK);
+    M5.Display.setTextSize(1);
 }
 
 void Display::clear()
 {
-    M5Dial.Display.clear();
-    M5Dial.Display.fillScreen(backgroundColor);
+    M5.Display.clear();
+    M5.Display.fillScreen(backgroundColor);
 }
 
 void Display::drawHorizontalLine(int x1, int x2, int y, TextColor color)
 {
-    M5Dial.Display.drawLine(x1, y, x2, y, getColorValue(color));
+    M5.Display.drawLine(x1, y, x2, y, getColorValue(color));
 }
 
 int Display::getWidth() const

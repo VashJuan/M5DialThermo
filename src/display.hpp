@@ -14,7 +14,7 @@
 #pragma once
 
 #include <Arduino.h>
-#include <M5Dial.h>
+#include <M5Unified.h>
 
 /**
  * @enum DisplayArea
@@ -26,7 +26,7 @@ enum DisplayArea
     TIME = 1,
     TEMP = 2,
     STOVE = 3,
-    STATUS = 4
+    STATUS_AREA = 4
 };
 
 /**

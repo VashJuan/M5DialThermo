@@ -64,13 +64,14 @@ bool RTC::connectToWiFi() {
 
 // https://en.wikipedia.org/wiki/Network_Time_Protocol
 bool RTC::synchronizeNTP() {
+    const int MAX_NTP_ATTEMPTS = 1000;
     Serial.println("Synchronizing with NTP...");
     
     configTzTime(ntpConfig.timezone, ntpConfig.server1, ntpConfig.server2, ntpConfig.server3);
 
 #if SNTP_ENABLED
     int attempts = 0;
-    while (sntp_get_sync_status() != SNTP_SYNC_STATUS_COMPLETED && attempts < 1000) {
+    while (sntp_get_sync_status() != SNTP_SYNC_STATUS_COMPLETED && attempts < MAX_NTP_ATTEMPTS) {
         Serial.print('.');
         delay(1000);
         attempts++;
@@ -100,7 +101,7 @@ bool RTC::synchronizeNTP() {
     // Set RTC time
     time_t t = time(nullptr) + 1; // Advance one second.
     while (t > time(nullptr)); // Synchronization in seconds
-    M5Dial.Rtc.setDateTime(gmtime(&t));
+    M5.Rtc.setDateTime(gmtime(&t));
     
     return true;
 }
@@ -108,7 +109,7 @@ bool RTC::synchronizeNTP() {
 bool RTC::setup() {
     Serial.println("RTC setup start");
     
-    if (!M5Dial.Rtc.isEnabled()) {
+    if (!M5.Rtc.isEnabled()) {
         Serial.println("RTC not found.");
         return false;
     }
@@ -142,7 +143,7 @@ void RTC::update() {
     Serial.println("RTC update start");
     delay(50);
 
-    auto dt = M5Dial.Rtc.getDateTime();
+    auto dt = M5.Rtc.getDateTime();
     Serial.printf("RTC   UTC  :%04d/%02d/%02d (%s)  %02d:%02d:%02d\r\n",
                   dt.date.year, dt.date.month, dt.date.date,
                   weekdays[dt.date.weekDay], dt.time.hours, dt.time.minutes,
@@ -184,11 +185,11 @@ time_t RTC::getCurrentTime() {
 }
 
 void RTC::setDateTime(const m5::rtc_datetime_t& dateTime) {
-    M5Dial.Rtc.setDateTime(dateTime);
+    M5.Rtc.setDateTime(dateTime);
 }
 
 bool RTC::isRTCEnabled() {
-    return M5Dial.Rtc.isEnabled();
+    return M5.Rtc.isEnabled();
 }
 
 void RTC::setWiFiCredentials(const char* ssid, const char* password) {
@@ -242,3 +243,14 @@ bool RTC::isSystemInitialized() const {
     return isInitialized;
 }
 
+
+int RTC::getHour() {
+    auto dt = M5.Rtc.getDateTime();
+    return dt.time.hours;
+}
+
+int RTC::getDayOfWeek() {
+    auto dt = M5.Rtc.getDateTime();
+    // Convert M5 day of week (1=Monday) to standard (0=Sunday)
+    return (dt.date.weekDay == 7) ? 0 : dt.date.weekDay;
+}

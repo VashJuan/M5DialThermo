@@ -15,7 +15,7 @@
 
 // #include <Arduino.h>
 // #include <time.h>
-#include <M5Dial.h>
+#include <M5Unified.h>
 
 #if defined(ARDUINO)
 #include <WiFi.h>
@@ -44,6 +44,17 @@ struct WiFiConfig
 {
     const char *ssid;
     const char *password;
+    /**
+     * @brief Get current hour (0-23)
+     * @return Current hour
+     */
+    int getHour();
+
+    /**
+     * @brief Get current day of week (0=Sunday, 6=Saturday)
+     * @return Day of week
+     */
+    int getDayOfWeek();
 };
 
 /**
@@ -56,6 +67,17 @@ struct NTPConfig
     const char *server1;
     const char *server2;
     const char *server3;
+    /**
+     * @brief Get current hour (0-23)
+     * @return Current hour
+     */
+    int getHour();
+
+    /**
+     * @brief Get current day of week (0=Sunday, 6=Saturday)
+     * @return Day of week
+     */
+    int getDayOfWeek();
 };
 
 /**
@@ -169,6 +191,17 @@ public:
      * @return true if initialized
      */
     bool isSystemInitialized() const;
+    /**
+     * @brief Get current hour (0-23)
+     * @return Current hour
+     */
+    int getHour();
+
+    /**
+     * @brief Get current day of week (0=Sunday, 6=Saturday)
+     * @return Day of week
+     */
+    int getDayOfWeek();
 };
 
 // Global instance for easy access

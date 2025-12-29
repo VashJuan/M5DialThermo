@@ -101,7 +101,7 @@ public:
      * @param tempSensor Reference to temperature sensor
      * @param rtc Reference to RTC for time-based adjustments
      */
-    String update(TemperatureSensor &tempSensor, RTC &rtc);
+    String update(float currentTemp, int hourOfWeek);
 
     /**
      * @brief Manually turn stove on

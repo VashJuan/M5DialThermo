@@ -95,7 +95,7 @@ String Stove::update(float currentTemp, int hourOfWeek)
     }
         
     // Get desired temperature for current time
-    float desiredTemp = getDesiredTemperature(hourOfWeek);
+    float desiredTemp = getDesiredTemperature(rtc);
     
     // Calculate temperature difference
     float tempDiff = desiredTemp - currentTemp;
@@ -178,8 +178,9 @@ StoveState Stove::getState() const
     return currentState;
 }
 
-float Stove::getDesiredTemperature(int currentHour)
-{    
+float Stove::getDesiredTemperature(RTC &rtc)
+{
+    int currentHour = rtc.getHour();
     float adjustment = getTemperatureAdjustment(currentHour);
     return baseTemperature + adjustment;
 }

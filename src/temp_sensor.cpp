@@ -13,7 +13,7 @@
  * Adafruit_MCP9808: https://github.com/adafruit/Adafruit_MCP9808_Library
  */
 
-#include <M5Dial.h>
+#include <M5Unified.h>
 #include "temp_sensor.hpp"
 
 

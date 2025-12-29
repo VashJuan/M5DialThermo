@@ -15,7 +15,7 @@
 
 #pragma once
 
-#include <M5Dial.h>
+#include <M5Unified.h>
 #include <Wire.h>
 #include "Adafruit_MCP9808.h"
 

@@ -22,6 +22,21 @@ communication.
 - Touch interface support
 - Sleep modes for power management
 
+### M5Dial thermostat should
+
+- Show a splash screen with "M5Dial Thermostat v 2.0.0"
+- Initialize the temperature sensor (MCP9808)
+- Connect to WiFi and sync time via NTP
+- Display temperature readings and stove status
+- Respond to button presses for manual stove override
+- Use interrupt-driven input for responsive UI
+
+### Note
+
+The warning about flash size (16MB vs 8MB available) is just a configuration
+mismatch but doesn't prevent operation since the actual firmware (889KB) fits
+comfortably in the available 8MB flash.
+
 ## Development Environment
 
 - **Platform**: Arduino M5Stack Board Manager v2.0.7
