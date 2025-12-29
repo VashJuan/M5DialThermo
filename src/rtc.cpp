@@ -17,9 +17,9 @@ RTC rtc;
 // Default configuration constants
 // WiFi credentials are now defined in secrets.h
 static const char* DEFAULT_NTP_TIMEZONE = "UTC-8";
-static const char* DEFAULT_NTP_SERVER1 = "0.pool.ntp.org";
-static const char* DEFAULT_NTP_SERVER2 = "1.pool.ntp.org";
-static const char* DEFAULT_NTP_SERVER3 = "2.pool.ntp.org";
+static const char* DEFAULT_NTP_SERVER1 = "time.nist.gov";
+static const char* DEFAULT_NTP_SERVER2 = "pool.ntp.org";
+static const char* DEFAULT_NTP_SERVER3 = "0.pool.ntp.org";
 
 // Static weekday strings
 static constexpr const char *const weekdays[7] = {"Sun", "Mon", "Tue", "Wed",

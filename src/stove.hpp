@@ -135,6 +135,12 @@ public:
     float getDesiredTemperature(RTC &rtc);
 
     /**
+     * @brief Get current desired temperature (using global rtc)
+     * @return Desired temperature in °F
+     */
+    float getCurrentDesiredTemperature();
+
+    /**
      * @brief Set base temperature
      * @param temp Base temperature in °F
      */

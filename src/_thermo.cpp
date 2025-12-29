@@ -125,11 +125,11 @@ bool updateStove(float temperature, int hourOfWeek, bool manualToggleRequested =
     {
         statusText = stove.toggleManualOverride(temperature);
 
-        // Give audio feedback for safety override
+        // Give audio feedback for safety override (non-blocking)
         if (statusText == "OFF (Safety)")
         {
             M5.Speaker.tone(4000, 100);
-            delay(100);
+            // Remove blocking delay - use tone duration instead
             M5.Speaker.tone(4000, 100);
         }
 
@@ -213,7 +213,7 @@ void setup()
 
     // Note: M5Dial encoder interrupts may be handled internally by M5.Encoder
     // If not, you would attach to GPIO40 and GPIO41
-    Serial.println("Interrupts configured for responsive input\n");
+    Serial.println("Interrupts configured for responsive input");
     
     yield(); // Feed watchdog
 }
@@ -279,13 +279,16 @@ void loop()
 
     // Read current values first so they're available for all handlers
     static int hourOfWeek = updateTime();
+    yield(); // Feed watchdog after time update
     static float curTemp = updateTemperature();
+    yield(); // Feed watchdog after temperature update
 
     // Skip stove control if time is not yet available
     if (hourOfWeek < 0) {
         Serial.println("Waiting for RTC initialization...");
-        delay(100); // Reduced from 1000ms
         yield(); // Feed watchdog
+        delay(100); // Reduced from 1000ms
+        yield(); // Feed watchdog after delay
         return;
     }
 
@@ -323,14 +326,29 @@ void loop()
 
     // Update stove status (handles both manual and automatic modes)
     bool stoveOn = updateStove(curTemp, hourOfWeek);
+    yield(); // Feed watchdog after stove update
 
     // For pending states, update display more frequently to show countdown
+    // Also show detailed temperature information periodically
     static unsigned long lastDisplayUpdate = 0;
-    if (millis() - lastDisplayUpdate > 1000) { // Update every second for countdown
+    static unsigned long loopCounterForDisplay = 0;
+    
+    if (millis() - lastDisplayUpdate > 2000) { // Update every 2 seconds to reduce load
         String currentState = stove.getStateString();
         if (currentState.startsWith("PENDING")) {
             display.showText(STOVE, "Stove: " + currentState);
+            yield(); // Feed watchdog after display update
         }
+        
+        // Show detailed status every ~25 loops (reduced frequency to prevent watchdog issues)
+        if (!(loopCounterForDisplay++ % 25)) {
+            float desiredTemp = stove.getCurrentDesiredTemperature();
+            float tempDiff = desiredTemp - curTemp;
+            String statusMsg = String(desiredTemp, 1) + "°F target, diff " + String(tempDiff, 1) + "°F";
+            display.showText(STATUS_AREA, statusMsg, COLOR_WHITE);
+            yield(); // Feed watchdog after status display
+        }
+        
         lastDisplayUpdate = millis();
     }
 
@@ -343,6 +361,7 @@ void loop()
         if (!powerSaveMode)
         {
             setCpuFrequencyMhz(40); // Further reduce CPU frequency when idle
+            yield(); // Feed watchdog before sensor shutdown
             tempSensor.shutdown();  // Shutdown sensor during idle periods
             powerSaveMode = true;
             Serial.println(String(loopCounter) + ") Entering power save mode (CPU 40MHz, sensor shutdown)");
@@ -353,19 +372,23 @@ void loop()
         if (powerSaveMode)
         {
             setCpuFrequencyMhz(80); // Return to normal power saving frequency
+            yield(); // Feed watchdog before sensor wakeup
             tempSensor.wakeUp();    // Wake up sensor when activity resumes
             powerSaveMode = false;
             Serial.println("Exiting power save mode (CPU 80MHz, sensor active)");
         }
     }
+    yield(); // Feed watchdog after power management
 
     // Note: stove status display is handled inside updateStove()
     // Note: M5Dial doesn't have PortB, use direct GPIO control\n
     // For now, just print stove status - actual GPIO control would need specific pin setup
     if (!(loopCounter++ % 100)) {
         Serial.println(String(loopCounter) + ") Stove control: " + stove.getStateString());
+        yield(); // Feed watchdog after serial output
     }
 
     yield(); // Feed watchdog before delay
-    delay(100); // Short delay to prevent excessive looping, interrupts still responsive
+    delay(50); // Reduced delay to prevent excessive looping while feeding watchdog more frequently
+    yield(); // Feed watchdog after delay
 }

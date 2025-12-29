@@ -22,6 +22,9 @@
 // Global instance for easy access
 Stove stove;
 
+// External reference to global RTC instance from main
+extern RTC rtc;
+
 // Safety maximum temperature
 const float Stove::SAFETY_MAX_TEMP = 82.0;
 
@@ -197,20 +200,18 @@ String Stove::update(float currentTemp, int hourOfWeek)
         return "Stove: not enabled";
     }
         
-    // Get desired temperature for current time
-    float desiredTemp = getDesiredTemperature(rtc);
-    
-    // Calculate temperature difference
+    float desiredTemp = getDesiredTemperature(rtc);   
     float tempDiff = desiredTemp - currentTemp;
     
-    // Show temperature info every 10 loop iterations (more frequent)
     if (!(loopCounter++ % 50))
      {
         Serial.printf("%lu) Temp: Current=%.1f°F, Target=%.1f°F, Diff=%.1f°F, State=%s\n", 
                       loopCounter, currentTemp, desiredTemp, tempDiff, getStateString().c_str());
     }
     
-    // Determine if state change is needed
+    // Feed watchdog during intensive stove operations
+    yield();
+    
     bool shouldBeOn = false;
     
     // Hysteresis: different thresholds for turning on vs off to prevent oscillation
@@ -222,7 +223,6 @@ String Stove::update(float currentTemp, int hourOfWeek)
         shouldBeOn = (tempDiff > STOVE_HYSTERESIS_HIGH);
     }
     
-    // Apply state change if needed and allowed
     if (shouldBeOn && (currentState == STOVE_OFF || currentState == STOVE_PENDING_OFF)) {
         if (canChangeState()) {
             status = turnOn();
@@ -245,7 +245,9 @@ String Stove::update(float currentTemp, int hourOfWeek)
     } else if (currentState == STOVE_PENDING_ON && !canChangeState()) {
         // Show remaining time for pending state
         unsigned long remainingSeconds = getTimeUntilNextChange();
-        Serial.printf("Stove: PENDING_ON, %lu seconds until ON\n", remainingSeconds);
+        if (!(loopCounter % 50)) {
+            Serial.printf("Stove: PENDING_ON, %lu seconds until ON\n", remainingSeconds);
+        }
     } else if (currentState == STOVE_PENDING_OFF && canChangeState()) {
         status = turnOff();
     }
@@ -293,6 +295,11 @@ float Stove::getDesiredTemperature(RTC &rtc)
     int currentHour = rtc.getHour();
     float adjustment = getTemperatureAdjustment(currentHour);
     return baseTemperature + adjustment;
+}
+
+float Stove::getCurrentDesiredTemperature()
+{
+    return getDesiredTemperature(rtc);
 }
 
 void Stove::setBaseTemperature(float temp)
