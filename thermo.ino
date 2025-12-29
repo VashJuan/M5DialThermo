@@ -32,12 +32,10 @@
 // Core M5Dial include must be first
 #include <M5Dial.h>
 
-// #include <Arduino.h>
 #include "encoder.hpp"
 #include "rtc.hpp"
 #include "temp_sensor.hpp"
 #include "stove.hpp"
-#include "display.hpp"
 #include "display.hpp"
 
 /**
@@ -62,7 +60,6 @@ int updateTime()
 
 float updateTemperature()
 {
-    // Read temperature sensor
     float temperature = tempSensor.readTemperatureFahrenheit();
 
     if (!tempSensor.isValidReading(temperature))
@@ -78,16 +75,35 @@ float updateTemperature()
     return temperature;
 }
 
-bool updateStove(float temperature, int hourOfWeek)
+bool updateStove(float temperature, int hourOfWeek, bool manualToggleRequested = false)
 {
-    // Signal stove to turn on/off based on the current temperature
-    String stoveStatus = stove.update(temperature, hourOfWeek);
-    if (stoveStatus.length() > 0)
+    String statusText = "";
+
+    // Handle manual toggle request
+    if (manualToggleRequested)
     {
-        Serial.println("Stove status: " + stoveStatus);
-        display.showText(STOVE, "Stove: " + stoveStatus);
+        statusText = stove.toggleManualOverride(temperature);
+
+        // Give audio feedback for safety override
+        if (statusText == "OFF (Safety)")
+        {
+            M5Dial.Speaker.tone(4000, 100);
+            delay(100);
+            M5Dial.Speaker.tone(4000, 100);
+        }
+
+        statusText = "Stove: " + statusText;
     }
-    return stoveStatus == "ON";
+    else
+    {
+        // Get current status
+        statusText = "Stove: " + stove.getStatus(temperature, hourOfWeek);
+    }
+
+    // Display status
+    display.showText(STOVE, statusText);
+
+    return (stove.getState() == STOVE_ON);
 }
 
 void setup()
@@ -127,15 +143,58 @@ void setup()
     String now = rtc.getFormattedTime();
     Serial.println("Setup done at " + now);
     display.showText(TIME, now);
+
+    // Setup interrupts for responsive user input
+    // M5Dial button is typically on GPIO42, encoder on GPIO40/41
+    attachInterrupt(digitalPinToInterrupt(42), buttonPressISR, FALLING);
+    attachInterrupt(digitalPinToInterrupt(42), buttonReleaseISR, RISING);
+
+    // Note: M5Dial encoder interrupts may be handled internally by M5Dial.Encoder
+    // If not, you would attach to GPIO40 and GPIO41
+    Serial.println("Interrupts configured for responsive input");
 }
 
 static uint32_t lastActivityTime = millis();
 bool recentActivity = false;
 int activityTimeout = 3000; // 5 seconds
 
-// Manual stove control state
-static bool manualStoveOverride = false;
-const float SAFETY_MAX_TEMP = 82.0; // Safety maximum temperature in °F
+// Interrupt flags (volatile for ISR communication)
+volatile bool encoderChanged = false;
+volatile bool buttonPressed = false;
+volatile bool buttonReleased = false;
+volatile unsigned long lastButtonTime = 0;
+
+// Interrupt Service Routines
+void IRAM_ATTR encoderISR()
+{
+    encoderChanged = true;
+    recentActivity = true;
+    lastActivityTime = millis();
+}
+
+void IRAM_ATTR buttonPressISR()
+{
+    unsigned long currentTime = millis();
+    if (currentTime - lastButtonTime > 50)
+    { // Debounce 50ms
+        buttonPressed = true;
+        recentActivity = true;
+        lastActivityTime = currentTime;
+        lastButtonTime = currentTime;
+    }
+}
+
+void IRAM_ATTR buttonReleaseISR()
+{
+    unsigned long currentTime = millis();
+    if (currentTime - lastButtonTime > 50)
+    { // Debounce 50ms
+        buttonReleased = true;
+        recentActivity = true;
+        lastActivityTime = currentTime;
+        lastButtonTime = currentTime;
+    }
+}
 
 void noteActivity()
 {
@@ -143,13 +202,13 @@ void noteActivity()
     lastActivityTime = millis();
 }
 
-int sleepShort = 1; // 1 second
-int sleepLong = 10; // sleep-in if no recent activity
-int loopCounter = 0;
-// bool touch_wakeup = true; // Whether to enable touch screen wake-up
-
 void loop()
 {
+    static const int sleepShort = 1; // 1 second
+    static const int sleepLong = 3;  // sleep-in if no recent activity
+    static int loopCounter = 0;
+    // bool touch_wakeup = true; // Whether to enable touch screen wake-up
+
     M5Dial.update();
     // encoder.update();
 
@@ -157,79 +216,70 @@ void loop()
     static int hourOfWeek = updateTime();
     static float curTemp = updateTemperature();
 
-    if (encoder.hasPositionChanged())
+    // Handle encoder changes (interrupt-driven)
+    if (encoderChanged)
     {
+        encoderChanged = false; // Clear flag
         long position = encoder.getPosition();
         Serial.printf("Encoder position: %ld\n", position);
-        noteActivity();
+        // Note: noteActivity() already called in ISR
     }
 
-    if (M5Dial.BtnA.wasPressed())
+    // Handle button press (interrupt-driven)
+    if (buttonPressed)
     {
+        buttonPressed = false; // Clear flag
         M5Dial.Speaker.tone(8000, 20);
         delay(250);
-        // M5Dial.Speaker.mute();
 
-        // Toggle manual stove override with safety check
-        if (!manualStoveOverride)
-        {
-            // Turning ON: check safety temperature limit
-            if (curTemp <= SAFETY_MAX_TEMP)
-            {
-                manualStoveOverride = true;
-                stove.forceState(true);
-                Serial.println("Button A pressed: Manual stove override ON");
-            }
-            else
-            {
-                Serial.printf("Safety: Cannot turn on stove - temperature %.1f°F exceeds safety limit of %.1f°F\n", curTemp, SAFETY_MAX_TEMP);
-                // Give audio feedback for safety override
-                M5Dial.Speaker.tone(4000, 100);
-                delay(100);
-                M5Dial.Speaker.tone(4000, 100);
-            }
-        }
-        else
-        {
-            // Turning OFF
-            manualStoveOverride = false;
-            stove.forceState(false);
-            Serial.println("Button A pressed: Manual stove override OFF");
-        }
-        noteActivity();
+        // Request manual toggle through updateStove function
+        updateStove(curTemp, hourOfWeek, true);
+        // Note: noteActivity() already called in ISR
     }
 
-    if (M5Dial.BtnA.wasReleased())
+    // Handle button release (interrupt-driven)
+    if (buttonReleased)
     {
+        buttonReleased = false; // Clear flag
         M5Dial.Speaker.tone(12000, 20);
         delay(500);
-        noteActivity();
+        // Note: noteActivity() already called in ISR
     }
 
+    // Update stove status (handles both manual and automatic modes)
     bool stoveOn = updateStove(curTemp, hourOfWeek);
 
-    // Display stove status including manual override
-    if (manualStoveOverride)
+    // Save battery power with display-friendly approach
+    // Use CPU frequency scaling and WiFi sleep instead of deep sleep
+    static bool powerSaveMode = false;
+
+    if (millis() - lastActivityTime > activityTimeout)
     {
-        display.showText(STOVE, "Stove: MANUAL ON");
-    }
-    else if (stoveOn)
-    {
-        display.showText(STOVE, "Stove: AUTO ON");
+        if (!powerSaveMode)
+        {
+            setCpuFrequencyMhz(40); // Further reduce CPU frequency when idle
+            powerSaveMode = true;
+            Serial.println(String(loopCounter++) + ") Entering power save mode (CPU 40MHz)");
+        }
     }
     else
     {
-        display.showText(STOVE, "Stove: OFF");
-        // https://deepwiki.com/m5stack/M5Unified/4.3-sleep-modes-and-power-off#wakeup-pin-configuration
-        // https://docs.m5stack.com/en/arduino/m5unified/power_class#lightsleep
-        // if (!(loopCounter++ % 10))
+        if (powerSaveMode)
         {
-            Serial.println(String(loopCounter) + ") Sleeping for " + String((millis() - lastActivityTime > activityTimeout) ? sleepLong : sleepShort) + " seconds...");
+            setCpuFrequencyMhz(80); // Return to normal power saving frequency
+            powerSaveMode = false;
+            Serial.println("Exiting power save mode (CPU 80MHz)");
         }
-
-        tempSensor.shutdown();
-        delay(((millis() - lastActivityTime > activityTimeout) ? sleepLong : sleepShort) * 1000);
-        // This blacks out the display, so not what we want...
-        // M5.Power.lightSleep(((millis() - lastActivityTime > activityTimeout) ? sleepLong : sleepShort) * 1000000ULL, touch_wakeup);
-        tempSensor.wakeUp();
     }
+
+    Serial.println("Stove is " + String(stoveOn ? "ON" : "OFF"));
+    display.showText(STOVE, "Stove: " + String(stoveOn ? "ON" : "OFF"));
+
+    // Let the physical stove know whether to be on or off
+    // Send the status via port B on the M5Dial which uses the Seeed Studio LoRa-E5-HF module (STM32WLE5JC) using UART
+    M5Dial.PortB.write(stoveOn ? 1 : 0);
+
+    tempSensor.shutdown();
+    delay(100); // Short delay to prevent excessive looping, interrupts still responsive
+    tempSensor.wakeUp();
+}

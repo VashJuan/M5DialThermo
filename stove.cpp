@@ -20,6 +20,9 @@
 // Global instance for easy access
 Stove stove;
 
+// Safety maximum temperature
+const float Stove::SAFETY_MAX_TEMP = 82.0;
+
 // Temperature schedule adjustments throughout the day (°F)
 // Index 0 is unused, indices 1-24 represent hours 1-24 (1 AM to Midnight)
 const float Stove::timeOffset[25] = {
@@ -36,7 +39,8 @@ Stove::Stove(int pin, float baseTemp) :
     baseTemperature(baseTemp),
     lastStateChange(0),
     minChangeInterval(300000), // 5 minutes in milliseconds
-    enabled(true)
+    enabled(true),
+    manualOverride(false)
 {
 }
 
@@ -54,20 +58,6 @@ void Stove::setup()
     
     Serial.printf("Stove control initialized on pin %d, base temperature: %.1f°F\n", 
                   relayPin, baseTemperature);
-}
-
-int Stove::getCurrentHour(RTC& rtc)
-{
-    if (!rtc.isSystemInitialized()) {
-        return 12; // Default to noon if RTC not available
-    }
-    
-    time_t currentTime = rtc.getCurrentTime();
-    struct tm* timeInfo = localtime(&currentTime);
-    
-    // Convert to 1-24 hour format for array indexing
-    int hour = timeInfo->tm_hour;
-    return (hour == 0) ? 24 : hour;
 }
 
 float Stove::getTemperatureAdjustment(int hour)
@@ -93,6 +83,11 @@ String Stove::update(float currentTemp, int hourOfWeek)
 {
     String status = "";
     static unsigned long loopCounter = 0;
+
+    // If manual override is active, don't run automatic control
+    if (manualOverride) {
+        return (currentState == STOVE_ON) ? "ON" : "OFF";
+    }
 
     if (!enabled) {
         Serial.println("Stove: not enabled");
@@ -243,5 +238,57 @@ void Stove::forceState(bool on)
     currentState = on ? STOVE_ON : STOVE_OFF;
     lastStateChange = millis();
     setRelayState(on);
+}
+
+String Stove::toggleManualOverride(float currentTemp)
+{
+    if (!manualOverride) {
+        // Turning ON: check safety temperature limit
+        if (currentTemp <= SAFETY_MAX_TEMP) {
+            manualOverride = true;
+            forceState(true);
+            Serial.println("Manual stove override ON");
+            return "MANUAL ON";
+        } else {
+            Serial.printf("Safety: Cannot turn on stove - temperature %.1f°F exceeds safety limit of %.1f°F\n", 
+                         currentTemp, SAFETY_MAX_TEMP);
+            return "OFF (Safety)";
+        }
+    } else {
+        // Turning OFF
+        manualOverride = false;
+        forceState(false);
+        Serial.println("Manual stove override OFF");
+        return "OFF";
+    }
+}
+
+bool Stove::isManualOverride() const
+{
+    return manualOverride;
+}
+
+String Stove::getStatus(float currentTemp, int hourOfWeek)
+{
+    if (manualOverride) {
+        return "MANUAL ON";
+    } else {
+        // Use existing update logic but just return status
+        String autoStatus = update(currentTemp, hourOfWeek);
+        if (autoStatus == "ON") {
+            return "AUTO ON";
+        } else {
+            return "OFF";
+        }
+    }
+}
+
+void Stove::clearManualOverride()
+{
+    if (manualOverride) {
+        manualOverride = false;
+        Serial.println("Manual override cleared - returning to automatic mode");
+        // Don't immediately change state, let automatic control take over on next update
+    }
 }
 

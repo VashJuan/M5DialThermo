@@ -47,22 +47,17 @@ static const float STOVE_HYSTERESIS_HIGH = 0.5;
 class Stove
 {
 private:
-    int relayPin;                    // GPIO pin for relay control
-    StoveState currentState;         // Current stove state
-    float baseTemperature;           // Base desired temperature (°F)
-    unsigned long lastStateChange;   // Time of last stove state change
-    unsigned long minChangeInterval; // Minimum time between state changes (5 minutes)
-    bool enabled;                    // Whether automatic control is enabled
+    int relayPin;                       // GPIO pin for relay control
+    StoveState currentState;            // Current stove state
+    float baseTemperature;              // Base desired temperature (°F)
+    unsigned long lastStateChange;      // Time of last stove state change
+    unsigned long minChangeInterval;    // Minimum time between state changes (5 minutes)
+    bool enabled;                       // Whether automatic control is enabled
+    bool manualOverride;                // Whether manual override is active
+    static const float SAFETY_MAX_TEMP; // Maximum safe temperature
 
     // Temperature schedule adjustments by hour (24-hour format)
     static const float timeOffset[25];
-
-    /**
-     * @brief Get current hour from RTC
-     * @param rtc Reference to RTC instance
-     * @return Current hour (0-23)
-     */
-    int getCurrentHour(RTC &rtc);
 
     /**
      * @brief Get temperature adjustment for current time
@@ -175,6 +170,32 @@ public:
      * @param on true to turn on, false to turn off
      */
     void forceState(bool on);
+
+    /**
+     * @brief Toggle manual override with safety check
+     * @param currentTemp Current temperature for safety check
+     * @return Status message indicating result of toggle attempt
+     */
+    String toggleManualOverride(float currentTemp);
+
+    /**
+     * @brief Check if manual override is active
+     * @return true if manual override is active
+     */
+    bool isManualOverride() const;
+
+    /**
+     * @brief Get comprehensive status including manual override
+     * @param currentTemp Current temperature
+     * @param hourOfWeek Current hour of week for automatic mode
+     * @return Status string (e.g., "MANUAL ON", "AUTO ON", "OFF", "OFF (Safety)")
+     */
+    String getStatus(float currentTemp, int hourOfWeek);
+
+    /**
+     * @brief Clear manual override and return to automatic mode
+     */
+    void clearManualOverride();
 };
 
 // Declare a global instance of the Stove class
