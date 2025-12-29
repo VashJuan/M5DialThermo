@@ -50,20 +50,51 @@ RTC::~RTC() {
 bool RTC::connectToWiFi() {
     Serial.println("Connecting to WiFi...");
     
+    // Disconnect any previous connections
+    WiFi.disconnect(true);
+    delay(100);
+    
+    // Configure WiFi with improved settings
+    WiFi.mode(WIFI_STA);
+    WiFi.setAutoReconnect(true);
+    WiFi.setSleep(false); // Disable WiFi sleep for better reliability
+    
+    // Configure DNS servers for better connectivity
+    WiFi.config(INADDR_NONE, INADDR_NONE, INADDR_NONE, IPAddress(8, 8, 8, 8), IPAddress(1, 1, 1, 1));
+    
+    Serial.printf("Connecting to SSID: %s\n", wifiConfig.ssid);
     WiFi.begin(wifiConfig.ssid, wifiConfig.password);
-    int maxAttempts = 500;
-    while (WiFi.status() != WL_CONNECTED && maxAttempts) {
+    
+    // Reduced timeout to respect watchdog timer (15 seconds max)
+    int maxAttempts = 60; // 60 * 250ms = 15 seconds
+    unsigned long startTime = millis();
+    
+    while (WiFi.status() != WL_CONNECTED && maxAttempts > 0) {
         Serial.print('.');
         delay(250); 
         yield(); // Feed watchdog
         maxAttempts--;
+        
+        // Additional safety check for total time
+        if (millis() - startTime > 15000) {
+            Serial.println("\nWiFi connection timeout (15s)");
+            break;
+        }
     }
     
     if (WiFi.status() == WL_CONNECTED) {
-        Serial.println("\r\n WiFi Connected.");
+        Serial.println("\r\nWiFi Connected.");
+        Serial.printf("IP address: %s\n", WiFi.localIP().toString().c_str());
+        Serial.printf("Signal strength: %d dBm\n", WiFi.RSSI());
+        Serial.printf("DNS: %s, %s\n", WiFi.dnsIP(0).toString().c_str(), WiFi.dnsIP(1).toString().c_str());
         return true;
     } else {
-        Serial.println("\r\n WiFi Connection Failed.");
+        Serial.printf("\r\nWiFi Connection Failed. Status: %d\n", WiFi.status());
+        Serial.println("Possible causes:");
+        Serial.println("- Incorrect SSID/password");
+        Serial.println("- WiFi network out of range");
+        Serial.println("- Network congestion");
+        Serial.println("- Router/AP issues");
         return false;
     }
 }
@@ -72,45 +103,97 @@ bool RTC::connectToWiFi() {
 bool RTC::synchronizeNTP() {
     Serial.println("Synchronizing with NTP...");
     
+    // Test DNS connectivity first
+    if (!testDNSConnectivity()) {
+        Serial.println("DNS connectivity test failed");
+        return false;
+    }
+    
+    Serial.printf("Using NTP servers: %s, %s, %s\n", ntpConfig.server1, ntpConfig.server2, ntpConfig.server3);
+    Serial.printf("Timezone: %s\n", ntpConfig.timezone);
+    
     configTzTime(ntpConfig.timezone, ntpConfig.server1, ntpConfig.server2, ntpConfig.server3);
+    
+    // Wait for initial configuration
+    delay(1000);
+    yield();
 
 #if SNTP_ENABLED
-    int maxAttempts = 500;
-    while (sntp_get_sync_status() != SNTP_SYNC_STATUS_COMPLETED && maxAttempts) {
+    Serial.println("Using SNTP sync status method");
+    unsigned long startTime = millis();
+    int maxAttempts = 40; // 40 * 250ms = 10 seconds max
+    
+    while (sntp_get_sync_status() != SNTP_SYNC_STATUS_COMPLETED && maxAttempts > 0) {
         Serial.print('.');
-        delay(250); // Increased to 250ms for more stable sync
+        delay(250);
         yield(); // Feed watchdog
         maxAttempts--;
+        
+        // Safety timeout
+        if (millis() - startTime > 10000) {
+            Serial.println("\nSNTP timeout (10s)");
+            break;
+        }
     }
     
     if (sntp_get_sync_status() != SNTP_SYNC_STATUS_COMPLETED) {
-        Serial.println("\r\n NTP Synchronization Failed (SNTP enabled).");
-        return false;
+        Serial.printf("\r\nNTP Synchronization Failed (SNTP enabled). Status: %d\n", sntp_get_sync_status());
+        return tryAlternativeNTPSync();
     }
 #else
-    delay(500); // Reduced from 1600ms
-    yield(); // Feed watchdog
+    Serial.println("Using getLocalTime method (SNTP not available)");
+    return tryAlternativeNTPSync();
+#endif
+
+    Serial.println("\r\nNTP Connected via SNTP.");
+    
+    // Verify and set RTC time
+    return setRTCFromNTP();
+}
+
+bool RTC::tryAlternativeNTPSync() {
+    Serial.println("Trying alternative NTP sync method...");
+    
+    unsigned long startTime = millis();
     struct tm timeInfo;
-    int maxAttempts = 100;
-    while (!getLocalTime(&timeInfo, 500) && maxAttempts) {
+    int maxAttempts = 20; // 20 * 500ms = 10 seconds max
+    
+    while (maxAttempts > 0) {
+        if (getLocalTime(&timeInfo, 500)) {
+            // Check if we got a reasonable time (after 2020)
+            if (timeInfo.tm_year + 1900 >= 2020) {
+                Serial.println("\r\nNTP Connected via getLocalTime.");
+                return setRTCFromNTP();
+            }
+        }
+        
         Serial.print('.');
         yield(); // Feed watchdog
         maxAttempts--;
+        
+        // Safety timeout
+        if (millis() - startTime > 10000) {
+            Serial.println("\nAlternative NTP timeout (10s)");
+            break;
+        }
     }
     
-    if (maxAttempts <= 0) {
-        Serial.println("\r\n NTP Synchronization Failed.");
-        return false;
-    }
-#endif
+    Serial.println("\r\nNTP Synchronization Failed (both methods).");
+    Serial.println("Possible causes:");
+    Serial.println("- Firewall blocking NTP (port 123)");
+    Serial.println("- NTP servers unreachable");
+    Serial.println("- Network connectivity issues");
+    Serial.println("- DNS resolution problems");
+    
+    return false;
+}
 
-    Serial.println("\r\n NTP Connected.");
-    
+bool RTC::setRTCFromNTP() {
     // Set RTC time with proper conversion
     time_t now = time(nullptr);
     struct tm *timeinfo = gmtime(&now);
     
-    if (timeinfo) {
+    if (timeinfo && timeinfo->tm_year + 1900 >= 2020) {
         // Convert tm struct to M5 RTC datetime format
         m5::rtc_datetime_t dt;
         dt.date.year = timeinfo->tm_year + 1900;
@@ -126,11 +209,36 @@ bool RTC::synchronizeNTP() {
         Serial.printf("RTC hardware updated: %04d/%02d/%02d (%s) %02d:%02d:%02d UTC\n",
                       dt.date.year, dt.date.month, dt.date.date,
                       weekdays[dt.date.weekDay], dt.time.hours, dt.time.minutes, dt.time.seconds);
+        return true;
     } else {
-        Serial.println("Warning: Failed to get time for RTC update");
+        Serial.println("Warning: Failed to get valid time for RTC update");
+        return false;
     }
+}
+
+bool RTC::testDNSConnectivity() {
+    Serial.println("Testing DNS connectivity...");
     
-    return true;
+    // Try to resolve a known domain
+    IPAddress result;
+    int dnsResult = WiFi.hostByName("google.com", result);
+    
+    if (dnsResult == 1) {
+        Serial.printf("DNS test successful: google.com -> %s\n", result.toString().c_str());
+        return true;
+    } else {
+        Serial.printf("DNS test failed: error %d\n", dnsResult);
+        
+        // Try with the NTP server directly
+        dnsResult = WiFi.hostByName(ntpConfig.server1, result);
+        if (dnsResult == 1) {
+            Serial.printf("NTP server DNS resolution successful: %s -> %s\n", ntpConfig.server1, result.toString().c_str());
+            return true;
+        } else {
+            Serial.printf("NTP server DNS resolution failed: %s (error %d)\n", ntpConfig.server1, dnsResult);
+            return false;
+        }
+    }
 }
 
 bool RTC::setup() {
@@ -146,6 +254,7 @@ bool RTC::setup() {
     // Connect to WiFi with shorter timeout
     if (!connectToWiFi()) {
         Serial.println("WiFi connection failed, using fallback timezone...");
+        WiFi.disconnect(); // Clean up
         return setupWithFallbackTimezone();
     }
     
@@ -153,15 +262,27 @@ bool RTC::setup() {
     Serial.println("Skipping automatic timezone detection to avoid watchdog timeout");
     Serial.println("Using configured default timezone");
     
-    // Configure timezone (use default)
-    configTzTime(ntpConfig.timezone, ntpConfig.server1, ntpConfig.server2, ntpConfig.server3);
-    delay(100);
-    yield(); // Feed watchdog
+    // Try NTP sync with robust error handling
+    bool ntpSuccess = false;
+    unsigned long syncStartTime = millis();
     
-    // Try NTP sync with shorter timeout
-    if (!synchronizeNTP()) {
-        //Serial.println("NTP sync failed, using fallback timezone...");
-        WiFi.disconnect();
+    try {
+        ntpSuccess = synchronizeNTP();
+    } catch (...) {
+        Serial.println("Exception during NTP sync");
+        ntpSuccess = false;
+    }
+    
+    // Check for overall timeout
+    if (millis() - syncStartTime > 15000) {
+        Serial.println("NTP sync overall timeout (15s)");
+        ntpSuccess = false;
+    }
+    
+    if (!ntpSuccess) {
+        Serial.println("NTP sync failed, using fallback timezone...");
+        WiFi.disconnect(); // Clean up WiFi connection
+        delay(100);
         return setupWithFallbackTimezone();
     }
     
@@ -179,7 +300,7 @@ void RTC::update() {
         return;
     }
 
-    Serial.println("RTC update start");
+    Serial.println("\nRTC update start");
     delay(50);
 
     auto dt = M5.Rtc.getDateTime();
@@ -218,7 +339,7 @@ void RTC::update() {
         Serial.println("ESP32 " + currentTimezone + ":" + formatTime(tm));
     }
 
-    Serial.println("RTC update end");
+    Serial.println("RTC update end\n");
 }
 
 String RTC::getFormattedTime(bool includeWeekday) {
@@ -428,10 +549,27 @@ bool RTC::loadFallbackTimezone() {
             // Serial.println("Found FallbackTimezone line!");
             int commaIndex = line.indexOf(',');
             if (commaIndex != -1) {
-                fallbackTimezone = line.substring(commaIndex + 1);
-                fallbackTimezone.trim();
+                String fullTimezone = line.substring(commaIndex + 1);
+                fullTimezone.trim();
+                
+                // Handle complex timezone formats (e.g., PST8PDT,M3.2.0,M11.1.0)
+                // Take the entire string as ESP32 supports complex timezone formats
+                fallbackTimezone = fullTimezone;
                 timezoneSet = true;
                 Serial.printf("Loaded fallback timezone: '%s'\n", fallbackTimezone.c_str());
+                
+                // Also log the simplified explanation for debugging
+                if (fallbackTimezone.startsWith("PST8PDT")) {
+                    Serial.println("  -> Pacific Standard Time with Daylight Saving Time");
+                } else if (fallbackTimezone.startsWith("EST5EDT")) {
+                    Serial.println("  -> Eastern Standard Time with Daylight Saving Time");
+                } else if (fallbackTimezone.startsWith("MST7MDT")) {
+                    Serial.println("  -> Mountain Standard Time with Daylight Saving Time");
+                } else if (fallbackTimezone.startsWith("CST6CDT")) {
+                    Serial.println("  -> Central Standard Time with Daylight Saving Time");
+                } else if (fallbackTimezone.startsWith("UTC")) {
+                    Serial.println("  -> Coordinated Universal Time");
+                }
             } else {
                 Serial.println("Error: No comma found in FallbackTimezone line");
             }
@@ -586,7 +724,7 @@ bool RTC::detectTimezoneFromLocation() {
         http.end(); // Close connection immediately
         
         // Parse JSON response with smaller buffer
-        DynamicJsonDocument doc(512); // Reduced buffer size
+        JsonDocument doc;
         DeserializationError error = deserializeJson(doc, payload);
         
         if (error) {

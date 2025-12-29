@@ -63,7 +63,36 @@ int updateTime()
     // Check if we have a valid time or if RTC is still initializing
     if (formattedTime.startsWith("RTC not") || formattedTime.startsWith("Time unavailable")) {
         display.showText(TIME, "Initializing clock...", COLOR_WHITE);
+        
+        // Try to re-initialize RTC if it's been failing for a while
+        static unsigned long lastRetryTime = 0;
+        static int retryCount = 0;
+        
+        if (millis() - lastRetryTime > 30000 && retryCount < 3) { // Retry every 30 seconds, max 3 times
+            lastRetryTime = millis();
+            retryCount++;
+            Serial.printf("Attempting RTC re-initialization (attempt %d/3)\\n", retryCount);
+            
+            // Try to reinitialize in background
+            if (rtc.setup()) {
+                Serial.println("RTC re-initialization successful");
+                retryCount = 0; // Reset counter on success
+            } else {
+                Serial.println("RTC re-initialization failed");
+                if (retryCount >= 3) {
+                    display.showText(STATUS_AREA, "Clock sync failed - check WiFi", COLOR_RED);
+                }
+            }
+        }
+        
         return -1; // Invalid time, return error code
+    }
+    
+    // Clear any previous error messages
+    static bool errorCleared = false;
+    if (!errorCleared) {
+        display.showText(STATUS_AREA, "");
+        errorCleared = true;
     }
     
     display.showText(TIME, formattedTime);

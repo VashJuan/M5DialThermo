@@ -127,6 +127,24 @@ private:
      */
     bool synchronizeNTP();
 
+    /**
+     * @brief Try alternative NTP synchronization method
+     * @return true if synchronization successful
+     */
+    bool tryAlternativeNTPSync();
+
+    /**
+     * @brief Set RTC hardware from NTP-synchronized time
+     * @return true if RTC was set successfully
+     */
+    bool setRTCFromNTP();
+
+    /**
+     * @brief Test DNS connectivity before attempting NTP sync
+     * @return true if DNS is working
+     */
+    bool testDNSConnectivity();
+
 public:
     /**
      * @brief Constructor with default configuration
