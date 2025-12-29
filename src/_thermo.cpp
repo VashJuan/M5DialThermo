@@ -39,14 +39,9 @@
 #include "stove.hpp"
 #include "display.hpp"
 
-// Forward declarations for ISR functions
-void IRAM_ATTR buttonPressISR();
-void IRAM_ATTR buttonReleaseISR();
-
-// Volatile variables for ISR communication
-volatile bool buttonPressed = false;
-volatile bool buttonReleased = false;
-volatile unsigned long buttonPressTime = 0;
+// Forward declarations for button handlers
+void handleButtonPress();
+void handleButtonRelease();
 
 /**
  * per https://docs.m5stack.com/en/core/M5Dial#pinmap:
@@ -207,67 +202,54 @@ void setup()
     // Clear status area for normal operation
     display.showText(STATUS_AREA, "");
 
-    // Enable interrupts for responsive user input
-    // M5Dial button is typically on GPIO42, encoder on GPIO40/41
-    attachInterrupt(digitalPinToInterrupt(42), buttonPressISR, FALLING);
-    attachInterrupt(digitalPinToInterrupt(42), buttonReleaseISR, RISING);
+    // Use M5's built-in button handling instead of raw GPIO interrupts
+    // M5Dial button handling is done through M5.update() and M5.BtnA
+    // attachInterrupt(digitalPinToInterrupt(42), buttonPressISR, FALLING);
+    // attachInterrupt(digitalPinToInterrupt(42), buttonReleaseISR, RISING);
 
     // Note: M5Dial encoder interrupts may be handled internally by M5.Encoder
-    // If not, you would attach to GPIO40 and GPIO41
-    Serial.println("Interrupt handling enabled for button input");
+    // Button handling will use M5.BtnA with efficient checking
+    Serial.println("Using M5 built-in button handling for optimal responsiveness");
     
     yield(); // Feed watchdog
 }
 
-// ISR function implementations
-void IRAM_ATTR buttonPressISR() {
-    unsigned long now = millis();
-    if (now - buttonPressTime > BUTTON_DEBOUNCE_MS) {
-        buttonPressed = true;
-        buttonPressTime = now;
+// M5 button handler functions (more reliable than raw GPIO interrupts)
+void handleButtonPress() {
+    recentActivity = true;
+    lastActivityTime = millis();
+    
+    Serial.println("Button pressed - toggling manual override");
+    
+    // Toggle manual override
+    float curTemp = tempSensor.readTemperatureFahrenheit();
+    if (tempSensor.isValidReading(curTemp)) {
+        String result = stove.toggleManualOverride(curTemp);
+        Serial.println("Manual toggle result: " + result);
+    } else {
+        Serial.println("Button press ignored - invalid temperature reading");
     }
 }
 
-void IRAM_ATTR buttonReleaseISR() {
-    unsigned long now = millis();
-    if (now - buttonPressTime > BUTTON_DEBOUNCE_MS) {
-        buttonReleased = true;
-    }
+void handleButtonRelease() {
+    recentActivity = true;
+    lastActivityTime = millis();
+    Serial.println("Button released");
 }
 
 static uint32_t lastActivityTime = millis();
 bool recentActivity = false;
 int activityTimeout = 3000; // 3 seconds
 
-// Debounce constant for interrupts
-static const unsigned long BUTTON_DEBOUNCE_MS = 150;
-
 // Button interrupt handler (replaces polling)
 void handleButtonInterrupts() {
-    // Handle button press interrupt
-    if (buttonPressed) {
-        buttonPressed = false; // Clear flag
-        recentActivity = true;
-        lastActivityTime = millis();
-        
-        Serial.println("Button pressed - toggling manual override");
-        
-        // Toggle manual override
-        float curTemp = tempSensor.readTemperatureFahrenheit();
-        if (tempSensor.isValidReading(curTemp)) {
-            String result = stove.toggleManualOverride(curTemp);
-            Serial.println("Manual toggle result: " + result);
-        } else {
-            Serial.println("Button press ignored - invalid temperature reading");
-        }
+    // Use M5's built-in button state detection for reliability
+    if (M5.BtnA.wasPressed()) {
+        handleButtonPress();
     }
     
-    // Handle button release interrupt
-    if (buttonReleased) {
-        buttonReleased = false; // Clear flag
-        recentActivity = true;
-        lastActivityTime = millis();
-        Serial.println("Button released");
+    if (M5.BtnA.wasReleased()) {
+        handleButtonRelease();
     }
 }
 
