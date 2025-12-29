@@ -117,37 +117,53 @@ bool RTC::synchronizeNTP() {
     Serial.printf("Using NTP servers: %s, %s, %s\n", ntpConfig.server1, ntpConfig.server2, ntpConfig.server3);
     Serial.printf("Timezone: %s\n", ntpConfig.timezone);
     
+    // Stop any existing SNTP to restart fresh
+    sntp_stop();
+    delay(100);
+    yield();
+    
     configTzTime(ntpConfig.timezone, ntpConfig.server1, ntpConfig.server2, ntpConfig.server3);
     
     // Wait for initial configuration
-    delay(500); // Reduced delay
+    delay(1000); // Increased delay for better initialization
     yield(); // Feed watchdog
 
 #if SNTP_ENABLED
     Serial.println("Using SNTP sync status method");
     unsigned long startTime = millis();
-    int maxAttempts = 30; // 30 * 250ms = 7.5 seconds max
+    int maxAttempts = 60; // 60 * 250ms = 15 seconds max
+    
+    // Check initial status
+    sntp_sync_status_t initial_status = sntp_get_sync_status();
+    Serial.printf("Initial SNTP status: %d\n", initial_status);
     
     while (sntp_get_sync_status() != SNTP_SYNC_STATUS_COMPLETED && maxAttempts > 0) {
         Serial.print('.');
-        delay(200); // Reduced delay
+        delay(250); // Increased delay
         yield(); // Feed watchdog
         maxAttempts--;
         
         // Safety timeout
-        if (millis() - startTime > 7500) {
-            Serial.println("\nSNTP timeout (7.5s)");
+        if (millis() - startTime > 15000) {
+            Serial.println("\nSNTP timeout (15s)");
             break;
         }
         
-        // Extra watchdog feeding
-        if (maxAttempts % 3 == 0) {
+        // Extra watchdog feeding and status check
+        if (maxAttempts % 5 == 0) {
             yield();
+            sntp_sync_status_t current_status = sntp_get_sync_status();
+            if (current_status != initial_status) {
+                Serial.printf("\nSNTP status changed to: %d\n", current_status);
+                initial_status = current_status;
+            }
         }
     }
     
-    if (sntp_get_sync_status() != SNTP_SYNC_STATUS_COMPLETED) {
-        Serial.printf("\r\nNTP Synchronization Failed (SNTP enabled). Status: %d\n", sntp_get_sync_status());
+    sntp_sync_status_t final_status = sntp_get_sync_status();
+    if (final_status != SNTP_SYNC_STATUS_COMPLETED) {
+        Serial.printf("\r\nNTP Synchronization Failed (SNTP enabled). Status: %d\n", final_status);
+        Serial.println("Status meanings: 0=RESET, 1=COMPLETED, 2=IN_PROGRESS");
         return tryAlternativeNTPSync();
     }
 #else
