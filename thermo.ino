@@ -117,14 +117,12 @@ void setup()
 
     Serial.print("Setting up encoder...");
     display.showText(TIME, "Setting up (encoder) dial...");
-    delay(500);
+    delay(250);
     encoder.setup();
 
     Serial.println(" and RTC...");
-    Serial.println("=========Display width returns: " + String(display.getWidth()));
-
     display.showText(TIME, "Setting up real time clock...");
-    delay(500);
+    delay(250);
     rtc.setup();
 
     // Initialize temperature sensor
@@ -156,7 +154,7 @@ void setup()
 
 static uint32_t lastActivityTime = millis();
 bool recentActivity = false;
-int activityTimeout = 3000; // 5 seconds
+int activityTimeout = 3000; // 3 seconds
 
 // Interrupt flags (volatile for ISR communication)
 volatile bool encoderChanged = false;

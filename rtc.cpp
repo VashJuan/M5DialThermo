@@ -210,6 +210,20 @@ String RTC::formatTime(const struct tm* t, bool includeWeekday) {
 
         timePtr = t;
     
+    // Convert 24-hour to 12-hour format with AM/PM
+    int hour12 = timePtr->tm_hour;
+    String ampm = "AM";
+    
+    if (hour12 == 0) {
+        hour12 = 12; // Midnight is 12 AM
+    } else if (hour12 == 12) {
+        ampm = "PM"; // Noon is 12 PM
+    } else if (hour12 > 12) {
+        hour12 -= 12; // Convert PM hours
+        ampm = "PM";
+    }
+    // Hours 1-11 remain the same with AM
+    
     String formatted;
     if (includeWeekday) {
         formatted = String(weekdays[timePtr->tm_wday]) + " ";
@@ -217,9 +231,10 @@ String RTC::formatTime(const struct tm* t, bool includeWeekday) {
     formatted += String(timePtr->tm_year + 1900) + "/" + 
                 String(timePtr->tm_mon + 1) + "/" + 
                 String(timePtr->tm_mday) + " " +
-                String(timePtr->tm_hour) + ":" + 
-                String(timePtr->tm_min) + ":" + 
-                String(timePtr->tm_sec);
+                String(hour12) + ":" + 
+                String(timePtr->tm_min < 10 ? "0" : "") + String(timePtr->tm_min) + ":" + 
+                String(timePtr->tm_sec < 10 ? "0" : "") + String(timePtr->tm_sec) + " " +
+                ampm;
     return formatted;
 }
 
