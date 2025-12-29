@@ -355,7 +355,7 @@ void loop()
                 if (isInactive) {
                     statusMsg += " (power save)";
                 }
-                display.showText(STATUS_AREA, statusMsg, isInactive ? COLOR_GRAY : COLOR_BLUE);
+                display.showText(STATUS_AREA, statusMsg, isInactive ? COLOR_GRAY : COLOR_BLACK);
             }
         }
         

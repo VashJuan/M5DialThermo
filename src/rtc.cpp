@@ -106,6 +106,7 @@ bool RTC::connectToWiFi() {
 
 // https://en.wikipedia.org/wiki/Network_Time_Protocol
 bool RTC::synchronizeNTP() {
+    unsigned long startTime = millis(); // Track timing for timeout
     Serial.println("Synchronizing with NTP...");
     
     // Test DNS connectivity first
@@ -119,40 +120,49 @@ bool RTC::synchronizeNTP() {
     
     // Stop any existing SNTP to restart fresh
     sntp_stop();
-    delay(100);
+    delay(500); // Longer delay to ensure clean stop
     yield();
     
+    Serial.println("Configuring SNTP with timezone and servers...");
+    
+    // Configure timezone and servers
     configTzTime(ntpConfig.timezone, ntpConfig.server1, ntpConfig.server2, ntpConfig.server3);
     
-    // Wait for initial configuration
-    delay(1000); // Increased delay for better initialization
-    yield(); // Feed watchdog
-
-#if SNTP_ENABLED
-    Serial.println("Using SNTP sync status method");
-    unsigned long startTime = millis();
-    int maxAttempts = 60; // 60 * 250ms = 15 seconds max
+    // Wait for initial configuration with shorter polling
+    delay(2000); // Increased delay for better initialization
+    int maxAttempts = 40; // 40 * 250ms = 10 seconds max (reduced from 15)
     
     // Check initial status
     sntp_sync_status_t initial_status = sntp_get_sync_status();
     Serial.printf("Initial SNTP status: %d\n", initial_status);
     
+    if (initial_status == SNTP_SYNC_STATUS_RESET) {
+        Serial.println("Warning: SNTP not starting - may indicate network issues");
+        // Try a shorter initialization timeout
+        delay(1000);
+        yield();
+    }
+    
     while (sntp_get_sync_status() != SNTP_SYNC_STATUS_COMPLETED && maxAttempts > 0) {
         Serial.print('.');
-        delay(250); // Increased delay
+        delay(250); // Reduced polling delay
         yield(); // Feed watchdog
         maxAttempts--;
         
-        // Safety timeout
-        if (millis() - startTime > 15000) {
-            Serial.println("\nSNTP timeout (15s)");
+        // Reduced timeout to prevent long blocking
+        if (millis() - startTime > 10000) { // 10 seconds instead of 15
+            Serial.println("\nSNTP timeout (10s) - may indicate network issues");
             break;
         }
         
-        // Extra watchdog feeding and status check
-        if (maxAttempts % 5 == 0) {
+        // Check for persistent RESET status which indicates network problems
+        if (maxAttempts % 8 == 0) { // Check every 2 seconds (8 * 250ms)
             yield();
             sntp_sync_status_t current_status = sntp_get_sync_status();
+            if (current_status == SNTP_SYNC_STATUS_RESET && maxAttempts < 32) {
+                Serial.println("\nPersistent SNTP RESET - network connectivity issues");
+                break; // Give up early if stuck in RESET
+            }
             if (current_status != initial_status) {
                 Serial.printf("\nSNTP status changed to: %d\n", current_status);
                 initial_status = current_status;
@@ -166,11 +176,7 @@ bool RTC::synchronizeNTP() {
         Serial.println("Status meanings: 0=RESET, 1=COMPLETED, 2=IN_PROGRESS");
         return tryAlternativeNTPSync();
     }
-#else
-    Serial.println("Using getLocalTime method (SNTP not available)");
-    return tryAlternativeNTPSync();
-#endif
-
+    
     Serial.println("\r\nNTP Connected via SNTP.");
     
     // Verify and set RTC time
@@ -293,10 +299,12 @@ bool RTC::setup() {
     if (WiFi.status() == WL_CONNECTED) {
         timezoneDetected = detectTimezoneFromLocation();
         yield(); // Feed watchdog after detection attempt
+    } else {
+        Serial.println("WiFi not connected - skipping timezone detection");
     }
     
     if (!timezoneDetected) {
-        Serial.println("Automatic timezone detection failed, using configured default timezone");
+        Serial.println("Using configured default timezone (network issues or detection failed)");
     }
     yield(); // Feed watchdog
     
@@ -848,9 +856,21 @@ bool RTC::detectTimezoneFromLocation() {
         return false;
     }
     
+    // First check if we can resolve the domain
+    IPAddress serverIP;
+    int dnsResult = WiFi.hostByName("worldtimeapi.org", serverIP);
+    if (dnsResult != 1) {
+        Serial.printf("DNS resolution failed for worldtimeapi.org (error %d)\n", dnsResult);
+        Serial.println("Skipping timezone detection due to DNS issues");
+        return false;
+    } else {
+        Serial.printf("DNS resolution successful: worldtimeapi.org -> %s\n", serverIP.toString().c_str());
+    }
+    yield(); // Feed watchdog after DNS
+    
     HTTPClient http;
     http.begin("http://worldtimeapi.org/api/ip");
-    http.setTimeout(15000); // Increased to 15 second timeout for better reliability
+    http.setTimeout(10000); // Reduced to 10 second timeout
     
     yield(); // Feed watchdog before HTTP request
     int httpResponseCode = http.GET();
@@ -893,6 +913,16 @@ bool RTC::detectTimezoneFromLocation() {
         }
     } else {
         Serial.printf("HTTP request failed: %d\n", httpResponseCode);
+        if (httpResponseCode == -1) {
+            Serial.println("Error: Connection refused or DNS lookup failed");
+        } else if (httpResponseCode == -5) {
+            Serial.println("Error: TCP connection failed or network unreachable");
+        } else if (httpResponseCode == -11) {
+            Serial.println("Error: Read timeout");
+        } else if (httpResponseCode > 0) {
+            Serial.printf("HTTP Error: %d\n", httpResponseCode);
+        }
+        Serial.println("Continuing with default timezone configuration...");
     }
     
     http.end();
