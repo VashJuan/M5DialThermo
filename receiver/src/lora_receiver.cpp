@@ -6,6 +6,7 @@
  */
 
 #include "lora_receiver.hpp"
+#include "secrets.h"
 
 LoRaReceiver::LoRaReceiver() : loraSerial(nullptr), isInitialized(false) {
     // Constructor
@@ -80,13 +81,14 @@ bool LoRaReceiver::configureLoRaWAN() {
     }
     
     // Configure keys (these should match your transmitter)
-    // NOTE: You'll need to set these to match your network and transmitter
-    // These are example values - replace with your actual keys
-    if (!sendATCommand("AT+APPEUI=0000000000000000", "OK")) {
+    // Keys are defined in secrets.h for security
+    String appEuiCommand = "AT+APPEUI=" + String(LORAWAN_APP_EUI);
+    if (!sendATCommand(appEuiCommand, "OK")) {
         return false;
     }
     
-    if (!sendATCommand("AT+APPKEY=00000000000000000000000000000000", "OK")) {
+    String appKeyCommand = "AT+APPKEY=" + String(LORAWAN_APP_KEY);
+    if (!sendATCommand(appKeyCommand, "OK")) {
         return false;
     }
     

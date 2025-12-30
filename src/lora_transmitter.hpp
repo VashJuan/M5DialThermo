@@ -27,6 +27,7 @@ private:
     int txPin;
     bool isInitialized;
     LoRaWANConfig config;
+    LoRaCommunicationMode currentMode;
 
     // Statistics and performance tracking
     unsigned long lastTransmissionTime;
@@ -45,9 +46,15 @@ private:
     bool sendATCommandWithTiming(const String &command, const String &expectedResponse, int timeout, unsigned long &commandTime);
     bool waitForTransmissionComplete(unsigned long &txTime, unsigned long &ackTime);
 
-    // LoRaWAN configuration
+    // Mode-specific configuration
+    bool configureP2P();
     bool configureLoRaWAN();
     bool joinNetwork();
+
+    // P2P communication methods
+    bool sendP2PMessage(const String &message);
+    String receiveP2PMessage(int timeout = 2000);
+    bool enterP2PReceiveMode();
 
     // Message handling
     String createHexMessage(const String &command, uint8_t port = LORAWAN_PORT_CONTROL);
@@ -185,8 +192,24 @@ public:
     bool sendRawHex(const String &hexData, uint8_t port = LORAWAN_PORT_CONTROL, bool confirmed = true);
 
     /**
-     * @brief Get device information (DevEUI, AppEUI, etc.)
-     * @return Device info string
+     * @brief Get current communication mode
+     * @return Current LoRaCommunicationMode
      */
-    String getDeviceInfo();
+    LoRaCommunicationMode getCurrentMode();
+
+    /**
+     * @brief Switch communication mode (P2P or LoRaWAN)
+     * @param mode New communication mode
+     * @return true if switch successful
+     */
+    bool switchMode(LoRaCommunicationMode mode);
+
+    /**
+     * @brief Send command with automatic mode fallback
+     * Tries P2P first, falls back to LoRaWAN if P2P fails
+     * @param command Command string to send
+     * @param maxRetries Maximum retry attempts per mode
+     * @return Response string, empty if both modes fail
+     */
+    String sendCommandWithFallback(const String &command, int maxRetries = 2);
 };

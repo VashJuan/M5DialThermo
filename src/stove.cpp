@@ -497,26 +497,35 @@ String Stove::sendLoRaCommand(const String& command)
 {
     if (!loraTransmitter) {
         lastLoRaResponse = "No transmitter";
+        statusDisplayText = "LoRa: No transmitter";
         return lastLoRaResponse;
     }
     
     if (!loraTransmitter->isReady()) {
         lastLoRaResponse = "Transmitter not ready";
+        statusDisplayText = "LoRa: Not ready";
         return lastLoRaResponse;
     }
     
     Serial.printf("Sending LoRa command: %s\n", command.c_str());
-    statusDisplayText = "Sending: " + command;
     
-    String response = loraTransmitter->sendCommand(command, LORAWAN_PORT_CONTROL, true, 2);
+    // Show current mode in status
+    LoRaCommunicationMode currentMode = loraTransmitter->getCurrentMode();
+    String modeStr = (currentMode == LoRaCommunicationMode::P2P) ? "P2P" : "LoRaWAN";
+    statusDisplayText = "Sending (" + modeStr + "): " + command;
+    
+    // Use fallback method for better reliability
+    String response = loraTransmitter->sendCommandWithFallback(command, 2);
     lastLoRaResponse = response;
     lastStatusUpdate = millis();
     
     if (response.length() == 0) {
-        statusDisplayText = "No response";
+        statusDisplayText = "LoRa: No response";
         return "TIMEOUT";
     }
     
+    // Update status with response and current mode
+    statusDisplayText = modeStr + ": " + response;
     return response;
 }
 

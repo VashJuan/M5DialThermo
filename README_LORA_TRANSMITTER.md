@@ -59,12 +59,65 @@ Controls: Physical stove/heater relay
 
 ### LoRaWAN Network Setup
 
-1. **Update Network Credentials** in your code:
+#### Step 1: Obtain LoRaWAN Network Credentials
+
+**AppEUI (Application EUI)** and **AppKey (Application Key)** are unique identifiers and encryption keys required for secure LoRaWAN network access. Here's how to obtain them:
+
+##### The Things Network (TTN) - Free LoRaWAN Network
+1. **Register for account**: Visit [The Things Network](https://www.thethingsnetwork.org/) and create a free account
+2. **Create application**:
+   - Log into [TTN Console](https://console.thethingsnetwork.org/)
+   - Click "Create Application"
+   - Choose a unique Application ID (e.g., "m5dial-thermostat")
+   - Set Description: "M5Dial Thermostat System"
+3. **Add end device**:
+   - In your application, click "Add end device"
+   - Select "Manually" for device registration
+   - Choose "LoRaWAN version: MAC V1.0.3"
+   - Select your frequency plan (US915 for North America, EU868 for Europe)
+   - Generate or enter Device EUI (unique per device)
+   - **AppEUI**: Automatically provided by TTN (or use your application's EUI)
+   - **AppKey**: Generated automatically (click the "generate" button for security)
+4. **Copy credentials**: Save the AppEUI and AppKey from the device overview page
+
+##### Alternative LoRaWAN Network Providers
+- **ChirpStack**: [ChirpStack Documentation](https://www.chirpstack.io/docs/) - Self-hosted open-source LoRaWAN server
+- **Helium Network**: [Helium Console](https://console.helium.com/) - Decentralized LoRaWAN network
+- **AWS IoT Core for LoRaWAN**: [AWS IoT Documentation](https://docs.aws.amazon.com/iot-wireless/) - Enterprise cloud integration
+- **Actility ThingPark**: [ThingPark Community](https://community.thingpark.org/) - Commercial LoRaWAN platform
+
+#### Step 2: Configure Device Credentials
+
+1. **Create secrets.h files**:
+   ```bash
+   # For transmitter (M5Dial)
+   cp src/secrets_template.h src/secrets.h
+
+   # For receiver
+   cp receiver/src/secrets_template.h receiver/src/secrets.h
+   ```
+
+2. **Update secrets.h with your actual credentials**:
 
 ```cpp
+// In both src/secrets.h AND receiver/src/secrets.h
+#define LORAWAN_APP_EUI "70B3D57ED005B4C0"                    // Your 16-char AppEUI
+#define LORAWAN_APP_KEY "A1B2C3D4E5F6789012345678ABCDEF01"    // Your 32-char AppKey
+```
+
+**Critical Security Requirements:**
+- **Both transmitter and receiver MUST use identical AppEUI and AppKey values**
+- **Never commit secrets.h files to version control** (they're in .gitignore)
+- **Use secrets_template.h as reference only** (safe to commit)
+
+3. **Verify your configuration** - The code automatically uses values from secrets.h:
+
+```cpp
+// Configuration is now automatically loaded from secrets.h
+// No need to modify these values in the code
 LoRaWANConfig config = {
-    .appEUI = "YOUR_APP_EUI_HERE",                    // 16 hex chars
-    .appKey = "YOUR_APP_KEY_HERE",                    // 32 hex chars
+    .appEUI = LORAWAN_APP_EUI,     // Loaded from secrets.h
+    .appKey = LORAWAN_APP_KEY,     // Loaded from secrets.h
     .region = LORAWAN_REGION_US915,                   // or EU868
     .dataRate = LORAWAN_DR_MEDIUM,
     .adaptiveDataRate = true,
@@ -74,6 +127,38 @@ LoRaWANConfig config = {
     .maxRetries = 3
 };
 ````
+
+**Important Security Notes:**
+
+- **secrets.h files contain your actual credentials** - Never commit these to
+  version control
+- **secrets_template.h files are safe to commit** - They contain no real
+  credentials
+- **Both devices must use identical AppEUI and AppKey** - They belong to the
+  same LoRaWAN application
+- **AppEUI Format**: 16 hexadecimal characters (8 bytes), e.g.,
+  "70B3D57ED005B4C0"
+- **AppKey Format**: 32 hexadecimal characters (16 bytes), e.g.,
+  "A1B2C3D4E5F6789012345678ABCDEF01"
+- **Regional Settings**: Use LORAWAN_REGION_US915 for North America,
+  LORAWAN_REGION_EU868 for Europe
+
+#### Step 3: Gateway Requirements
+
+**Gateway Options:**
+
+- **Public Networks**: TTN provides free public gateway access in many cities
+- **Private Gateway**: Purchase and configure your own gateway for guaranteed
+  coverage
+  - [TTN Gateway Options](https://www.thethingsnetwork.org/docs/gateways/)
+  - [Seeed Studio WM1302 Gateway](https://www.seeedstudio.com/WM1302-LoRaWAN-Gateway-Module-SPI-US915-p-4889.html)
+  - [Dragino LPS8N](https://www.dragino.com/products/lora-lorawan-gateway/item/148-lps8n.html)
+
+**Coverage Check:**
+
+- **TTN Mapper**: [TTNMapper.org](https://ttnmapper.org/) - Check existing
+  gateway coverage
+- **Range**: LoRaWAN typically provides 2-15km range depending on environment
 
 2. **Gateway Configuration** - Follow
    [Grove-Wio-E5 documentation](https://wiki.seeedstudio.com/Grove_LoRa_E5_New_Version/)

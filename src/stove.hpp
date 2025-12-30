@@ -17,7 +17,6 @@
 #include "temp_sensor.hpp"
 #include "rtc.hpp"
 #include "lora_transmitter.hpp"
-#include "relay_control.hpp"
 
 /**
  * @enum StoveState

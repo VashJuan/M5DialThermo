@@ -47,8 +47,8 @@ void handleButtonRelease();
 // LoRa transmitter instance and configuration
 LoRaTransmitter loraTransmitter;
 LoRaWANConfig loraConfig = {
-    .appEUI = "0000000000000000",                       // Replace with your AppEUI  
-    .appKey = "00000000000000000000000000000000",       // Replace with your AppKey
+    .appEUI = LORAWAN_APP_EUI,                          // From secrets.h
+    .appKey = LORAWAN_APP_KEY,                          // From secrets.h
     .region = LORAWAN_REGION_US915,                     // Change to EU868 if in Europe
     .dataRate = LORAWAN_DR_MEDIUM,
     .adaptiveDataRate = true,
@@ -239,8 +239,13 @@ void setup()
     if (loraTransmitter.setup(LORA_RX_PIN, LORA_TX_PIN, loraConfig)) {
         stove.setLoRaTransmitter(&loraTransmitter);
         stove.setLoRaControlEnabled(true);
-        Serial.println("LoRa transmitter initialized successfully");
-        display.showText(STATUS_AREA, "LoRa transmitter ready", COLOR_GREEN);
+        
+        // Get current mode for display
+        LoRaCommunicationMode currentMode = loraTransmitter.getCurrentMode();
+        String modeStr = (currentMode == LoRaCommunicationMode::P2P) ? "P2P" : "LoRaWAN";
+        
+        Serial.printf("LoRa transmitter initialized successfully in %s mode\n", modeStr.c_str());
+        display.showText(STATUS_AREA, "LoRa ready: " + modeStr, COLOR_GREEN);
     } else {
         Serial.println("LoRa transmitter initialization failed - continuing without LoRa");
         display.showText(STATUS_AREA, "LoRa failed - local mode only", COLOR_ORANGE);

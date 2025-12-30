@@ -27,6 +27,28 @@
 #define RESP_TIMEOUT "SAFETY_TIMEOUT"
 #define RESP_UNKNOWN "ERROR_UNKNOWN_COMMAND"
 
+// Communication modes
+enum LoRaCommunicationMode
+{
+    LORA_MODE_P2P = 0,    // Point-to-point (default, simpler)
+    LORA_MODE_LORAWAN = 1 // LoRaWAN (fallback, more complex)
+};
+
+// P2P Configuration Constants
+// Based on Grove Wio E5 P2P example
+#define P2P_FREQUENCY 866           // Frequency in MHz (adjust based on region)
+#define P2P_SPREADING_FACTOR "SF12" // Spreading factor (SF7-SF12)
+#define P2P_BANDWIDTH "125"         // Bandwidth in kHz
+#define P2P_CODING_RATE "12"        // Coding rate 4/5, 4/6, 4/7, 4/8 -> 5,6,7,8
+#define P2P_PREAMBLE_LENGTH "15"    // Preamble length
+#define P2P_TX_POWER "14"           // TX power in dBm
+#define P2P_CRC "ON"                // CRC enable/disable
+#define P2P_IQ_INVERSION "OFF"      // IQ inversion
+#define P2P_SYNC_WORD "OFF"         // Sync word
+
+// P2P command prefix for protocol identification
+#define P2P_MSG_PREFIX "THERMO" // 6 chars prefix to identify our messages
+
 // LoRaWAN Configuration Constants
 // Note: These should match between transmitter and receiver
 
@@ -141,20 +163,39 @@ public:
     }
 
     /**
-     * @brief Validate response string
-     * @param response Response to validate
-     * @return true if response is valid
+     * @brief Create a P2P message with prefix for identification
+     * @param command Command string
+     * @return Formatted P2P message
      */
-    static bool isValidResponse(const String &response)
+    static String createP2PMessage(const String &command)
     {
-        return (response == RESP_ACK ||
-                response == RESP_NACK ||
-                response == RESP_STOVE_ON ||
-                response == RESP_STOVE_OFF ||
-                response == RESP_PONG ||
-                response == RESP_ERROR ||
-                response == RESP_TIMEOUT ||
-                response == RESP_UNKNOWN);
+        // Format: PREFIX + command (e.g., "THERMOSTOVE_ON")
+        return String(P2P_MSG_PREFIX) + command;
+    }
+
+    /**
+     * @brief Parse received P2P message and extract command
+     * @param message Received P2P message
+     * @return Extracted command string, empty if invalid prefix
+     */
+    static String parseP2PMessage(const String &message)
+    {
+        String prefix = String(P2P_MSG_PREFIX);
+        if (message.startsWith(prefix))
+        {
+            return message.substring(prefix.length());
+        }
+        return ""; // Invalid prefix
+    }
+
+    /**
+     * @brief Check if message is a valid P2P thermostat message
+     * @param message Message to check
+     * @return true if valid P2P message
+     */
+    static bool isValidP2PMessage(const String &message)
+    {
+        return message.startsWith(P2P_MSG_PREFIX);
     }
 };
 
@@ -162,6 +203,21 @@ public:
 // NOTE: These are example values - replace with your actual network configuration
 struct LoRaWANConfig
 {
+    // Communication mode selection
+    LoRaCommunicationMode mode = LORA_MODE_P2P; // Default to P2P
+
+    // P2P configuration (used when mode = LORA_MODE_P2P)
+    uint16_t p2pFrequency = P2P_FREQUENCY;
+    String p2pSpreadingFactor = P2P_SPREADING_FACTOR;
+    String p2pBandwidth = P2P_BANDWIDTH;
+    String p2pCodingRate = P2P_CODING_RATE;
+    String p2pPreambleLength = P2P_PREAMBLE_LENGTH;
+    String p2pTxPower = P2P_TX_POWER;
+    String p2pCrc = P2P_CRC;
+    String p2pIqInversion = P2P_IQ_INVERSION;
+    String p2pSyncWord = P2P_SYNC_WORD;
+
+    // LoRaWAN configuration (used when mode = LORA_MODE_LORAWAN)
     String appEUI = "0000000000000000";                 // Application EUI (8 bytes hex)
     String appKey = "00000000000000000000000000000000"; // Application Key (16 bytes hex)
     String region = LORAWAN_DEFAULT_REGION;             // Frequency region
