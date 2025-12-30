@@ -115,11 +115,9 @@ void Display::showText(DisplayArea area, const String& text, TextColor color, bo
     M5.Display.setTextColor(getColorValue(color));
     M5.Display.setTextSize(getAreaTextSize(area));
 
-    // if  text (for the STATUS_AREA or STOVE area) is too long, allow it to wrap
+    // if  text (for the STATUS_AREA or STOVE area) is too long, break it into multiple lines
     if (area == STATUS_AREA || area == STOVE) {
-        M5.Display.setTextWrap(true);
-        M5.Display.drawCenterString(text, centerX, getAreaY(area));
-        M5.Display.setTextWrap(false);
+        drawMultiLineText(text, centerX, getAreaY(area), getAreaTextSize(area));
     } else {
         M5.Display.drawCenterString(text, centerX, getAreaY(area));
     }
@@ -158,4 +156,72 @@ int Display::getCenterX() const
 int Display::getCenterY() const
 {
     return centerY;
+}
+
+void Display::drawMultiLineText(const String& text, int centerX, int startY, int textSize)
+{
+    M5.Display.setTextSize(textSize);
+    
+    // Calculate approximate character width for line breaking
+    int charWidth = 6 * textSize;  // Rough estimate for default font
+    int radius = screenWidth / 2;  // Assume circular display
+    int centerY = screenHeight / 2;
+    
+    String remainingText = text;
+    int currentY = startY;
+    int lineHeight = 8 * textSize + 2; // Text height plus small spacing
+    
+    while (remainingText.length() > 0) {
+        // Calculate available width at current Y position for round display
+        int distanceFromCenter = abs(currentY - centerY);
+        int availableWidth = screenWidth;
+        
+        // Apply circular constraint - reduce width as we move away from center
+        if (distanceFromCenter < radius) {
+            // Use Pythagorean theorem to find available width at this Y position
+            float availableRadius = sqrt(radius * radius - distanceFromCenter * distanceFromCenter);
+            availableWidth = (int)(2 * availableRadius * 0.9); // 90% to add margin
+        }
+        
+        int maxCharsPerLine = availableWidth / charWidth;
+        maxCharsPerLine = max(maxCharsPerLine, 8); // Minimum 8 characters per line
+        
+        String line;
+        
+        if (remainingText.length() <= maxCharsPerLine) {
+            // Remaining text fits on one line
+            line = remainingText;
+            remainingText = "";
+        } else {
+            // Find the best break point (space or punctuation)
+            int breakPoint = maxCharsPerLine;
+            
+            // Look for space, comma, or other natural break points
+            for (int i = maxCharsPerLine - 1; i > maxCharsPerLine * 0.7; i--) {
+                if (remainingText.charAt(i) == ' ' || 
+                    remainingText.charAt(i) == ',' || 
+                    remainingText.charAt(i) == ':' ||
+                    remainingText.charAt(i) == '(' ||
+                    remainingText.charAt(i) == ')') {
+                    breakPoint = i;
+                    break;
+                }
+            }
+            
+            line = remainingText.substring(0, breakPoint);
+            remainingText = remainingText.substring(breakPoint);
+            
+            // Remove leading space from next line
+            remainingText.trim();
+        }
+        
+        // Draw the line centered
+        M5.Display.drawCenterString(line, centerX, currentY);
+        currentY += lineHeight;
+        
+        // Prevent infinite loop and screen overflow
+        if (currentY > screenHeight - lineHeight) {
+            break;
+        }
+    }
 }

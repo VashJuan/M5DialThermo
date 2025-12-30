@@ -99,6 +99,15 @@ private:
      */
     void clearArea(DisplayArea area);
 
+    /**
+     * @brief Draw multi-line text centered on screen
+     * @param text Text to display (will be broken into lines)
+     * @param centerX X coordinate for centering
+     * @param startY Y coordinate to start drawing
+     * @param textSize Text size multiplier
+     */
+    void drawMultiLineText(const String &text, int centerX, int startY, int textSize);
+
 public:
     /**
      * @brief Constructor
