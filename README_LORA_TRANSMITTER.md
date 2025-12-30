@@ -6,14 +6,15 @@ communication.
 
 ## Overview
 
-The LoRa transmitter system consists of three main components:
+The LoRa transmitter system consists of two main components:
 
-1. **RelayControl Class** - Extracted relay functionality from the Stove class
-   for better modularity
-2. **LoRaTransmitter Class** - Handles LoRaWAN communication using Grove-Wio-E5
+1. **LoRaTransmitter Class** - Handles LoRaWAN communication using Grove-Wio-E5
    module
-3. **Enhanced Stove Class** - Integrates with RelayControl and supports LoRa
-   remote commands
+2. **Enhanced Stove Class** - Integrates with LoRaTransmitter for remote control
+   and status display
+
+**Note**: The RelayControl class is only used on the receiver side. The M5Dial
+transmitter sends commands via LoRa and displays status responses.
 
 ## Hardware Requirements
 
@@ -22,7 +23,6 @@ The LoRa transmitter system consists of three main components:
 - **M5Dial** - Main controller unit
 - **Grove-Wio-E5** - LoRaWAN module for transmission
 - **MCP9808** - Temperature sensor
-- **Relay Module** - For stove/heater control
 
 ### Connection Diagram
 
@@ -30,12 +30,6 @@ The LoRa transmitter system consists of three main components:
 M5Dial (Transmitter)
 ├── Pin 43 (TX) → Grove-Wio-E5 RX
 ├── Pin 44 (RX) ← Grove-Wio-E5 TX
-├── Pin 2 → Relay Control
-├── I2C (Pins 15,13) → MCP9808 Temperature Sensor
-└── Power/Ground connections
-```
-
-### Receiver Setup (Separate Device)
 
 - **ESP32/Arduino** - Receiver controller
 - **Grove-Wio-E5** - LoRaWAN module for reception
@@ -46,21 +40,20 @@ M5Dial (Transmitter)
 ### Class Hierarchy
 
 ```
-LoRaTransmitter
-├── Uses: HardwareSerial, LoRaWANConfig
-├── Implements: AT command protocol from Grove-Wio-E5 examples
-└── Features: Timing measurements, statistics, retry logic
 
-RelayControl
-├── Extracted from: Stove class
-├── Manages: GPIO relay control, timing, safety
-└── Supports: Local and remote control modes
+Transmitter Side (M5Dial): LoRaTransmitter ├── Uses: HardwareSerial,
+LoRaWANConfig ├── Implements: AT command protocol from Grove-Wio-E5 examples └──
+Features: Timing measurements, statistics, retry logic
 
-Stove (Enhanced)
-├── Uses: RelayControl for physical relay operations
-├── Integrates: LoRaTransmitter for remote commands
-└── Maintains: Temperature scheduling and safety logic
-```
+Stove (Enhanced) ├── Uses: LoRaTransmitter for remote commands ├── Displays:
+Status responses from remote receiver └── Maintains: Temperature scheduling and
+safety logic
+
+Receiver Side (Separate Device): RelayControl ├── Manages: GPIO relay control,
+timing, safety ├── Integrates: With LoRaReceiver for remote commands └──
+Controls: Physical stove/heater relay
+
+````
 
 ## Configuration
 
@@ -80,7 +73,7 @@ LoRaWANConfig config = {
     .confirmUplinks = 1,
     .maxRetries = 3
 };
-```
+````
 
 2. **Gateway Configuration** - Follow
    [Grove-Wio-E5 documentation](https://wiki.seeedstudio.com/Grove_LoRa_E5_New_Version/)
@@ -91,12 +84,11 @@ LoRaWANConfig config = {
 Default pins can be changed in the code:
 
 ```cpp
-// LoRa Module Pins
+// LoRa Module Pins (M5Dial Transmitter)
 const int LORA_RX_PIN = 44;  // M5Dial → Grove-Wio-E5 TX
 const int LORA_TX_PIN = 43;  // M5Dial ← Grove-Wio-E5 RX
 
-// Relay Control Pin
-const int RELAY_PIN = 2;     // GPIO for relay control
+// Note: Relay control pin only needed on receiver side
 ```
 
 ## Usage Examples
@@ -108,7 +100,7 @@ const int RELAY_PIN = 2;     // GPIO for relay control
 #include "stove.hpp"
 
 LoRaTransmitter transmitter;
-Stove stove(RELAY_PIN); // Uses RelayControl internally
+Stove stove(&transmitter); // Pass transmitter to stove
 
 void setup() {
     // Initialize LoRa transmitter
@@ -119,11 +111,12 @@ void setup() {
 }
 
 void loop() {
-    // Send manual stove command
-    String response = transmitter.sendCommand("STOVE_ON");
-    if (response == "STOVE_ON") {
-        Serial.println("Remote stove turned ON");
-    }
+    // Stove class handles automatic temperature control via LoRa
+    float currentTemp = tempSensor.readTemperatureFahrenheit();
+    int hourOfWeek = rtc.getDayOfWeek() * 24 + rtc.getHour();
+
+    String statusText = stove.update(currentTemp, hourOfWeek);
+    display.showText(STOVE, statusText); // Display LoRa status
 }
 ```
 
@@ -196,11 +189,10 @@ repository:
 
 ## File Structure
 
-```
+````
 src/
-├── relay_control.hpp/cpp     # Extracted relay control functionality
 ├── lora_transmitter.hpp/cpp  # LoRaWAN transmitter implementation
-├── stove.hpp/cpp             # Enhanced stove class (refactored)
+├── stove.hpp/cpp             # Enhanced stove class (LoRa integration)
 └── lora_thermostat_transmitter.cpp # Full integration example
 
 shared/
@@ -210,10 +202,10 @@ examples/
 └── simple_lora_transmitter_example.cpp # Basic usage example
 
 receiver/
-└── (existing receiver implementation)
-```
-
-## Compilation Instructions
+├── src/
+│   ├── lora_receiver.hpp/cpp    # LoRaWAN receiver implementation
+│   ├── relay_control.hpp/cpp    # Physical relay control (receiver only)
+│   └── receiver_main.cpp        # Receiver integration
 
 ### PlatformIO (Recommended)
 
@@ -233,7 +225,7 @@ build_flags =
     -DCORE_DEBUG_LEVEL=3
 
 monitor_speed = 9600
-```
+````
 
 ### Arduino IDE
 

@@ -16,7 +16,7 @@
 #include <Arduino.h>
 #include "temp_sensor.hpp"
 #include "rtc.hpp"
-#include "relay_control.hpp"
+#include "lora_transmitter.hpp"
 #include "relay_control.hpp"
 
 /**
@@ -38,25 +38,30 @@ static const float STOVE_HYSTERESIS_HIGH = 0.5;
 
 /**
  * @class Stove
- * @brief Stove control class for automated temperature management
+ * @brief Stove control class for automated temperature management via LoRa
  *
  * This class provides functionality to:
  * 1. Read temperature schedule adjustments throughout the day
  * 2. Compare current room temperature with desired temperature
- * 3. Control stove on/off with minimum 5-minute intervals between changes
- * 4. Manage stove relay output
+ * 3. Send LoRa commands to remote relay controller
+ * 4. Display status received from remote controller
+ * 5. Manage timing constraints and safety checks
  */
 class Stove
 {
 private:
-    RelayControl relayControl;          // Relay control instance
-    StoveState currentState;            // Current stove state
+    LoRaTransmitter *loraTransmitter;   // LoRa transmitter instance (pointer for optional use)
+    StoveState currentState;            // Current stove state (based on last known remote status)
+    StoveState lastCommandedState;      // Last state we commanded via LoRa
     float baseTemperature;              // Base desired temperature (°F)
-    unsigned long lastStateChange;      // Time of last stove state change
-    unsigned long minChangeInterval;    // Minimum time between state changes (5 minutes)
+    unsigned long lastStateChange;      // Time of last state change command
+    unsigned long lastStatusUpdate;     // Time of last status update from remote
+    unsigned long minChangeInterval;    // Minimum time between state changes (3 minutes)
     bool enabled;                       // Whether automatic control is enabled
     bool manualOverride;                // Whether manual override is active
     bool loraControlEnabled;            // Whether LoRa remote control is enabled
+    String lastLoRaResponse;            // Last response from LoRa transmitter
+    String statusDisplayText;           // Current status text for display
     static const float SAFETY_MAX_TEMP; // Maximum safe temperature
 
     // Temperature schedule adjustments by hour (24-hour format)
@@ -90,10 +95,10 @@ private:
 public:
     /**
      * @brief Constructor
-     * @param pin GPIO pin for relay control (default: 2)
+     * @param transmitter Pointer to LoRa transmitter instance (optional, can be set later)
      * @param baseTemp Base desired temperature in °F (default: loaded from CSV, fallback: 68.0)
      */
-    Stove(int pin = 2, float baseTemp = -1.0);
+    Stove(LoRaTransmitter *transmitter = nullptr, float baseTemp = -1.0);
 
     /**
      * @brief Destructor
@@ -225,18 +230,35 @@ public:
     bool isLoRaControlEnabled() const;
 
     /**
-     * @brief Process LoRa remote control command
-     * @param command Command string from LoRa (e.g., "STOVE_ON", "STOVE_OFF")
-     * @param currentTemp Current temperature for safety checks
-     * @return Response string to send back via LoRa
+     * @brief Set LoRa transmitter instance
+     * @param transmitter Pointer to LoRa transmitter instance
      */
-    String processLoRaCommand(const String &command, float currentTemp);
+    void setLoRaTransmitter(LoRaTransmitter *transmitter);
 
     /**
-     * @brief Get relay control instance (for direct access if needed)
-     * @return Reference to RelayControl instance
+     * @brief Send command to remote stove via LoRa
+     * @param command Command to send (STOVE_ON, STOVE_OFF, STATUS_REQUEST)
+     * @return Response status for display
      */
-    RelayControl &getRelayControl();
+    String sendLoRaCommand(const String &command);
+
+    /**
+     * @brief Update remote stove status via LoRa
+     * @return Status string for display
+     */
+    String updateRemoteStatus();
+
+    /**
+     * @brief Get current status text for display
+     * @return Status text including LoRa communication status
+     */
+    String getDisplayStatusText() const;
+
+    /**
+     * @brief Get last LoRa response
+     * @return Last response from LoRa transmitter
+     */
+    String getLastLoRaResponse() const;
 
     /**
      * @brief Enable or disable LoRa remote control

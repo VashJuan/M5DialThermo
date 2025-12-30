@@ -38,10 +38,29 @@
 #include "temp_sensor.hpp"
 #include "stove.hpp"
 #include "display.hpp"
+#include "lora_transmitter.hpp"
 
 // Forward declarations for button handlers
 void handleButtonPress();
 void handleButtonRelease();
+
+// LoRa transmitter instance and configuration
+LoRaTransmitter loraTransmitter;
+LoRaWANConfig loraConfig = {
+    .appEUI = "0000000000000000",                       // Replace with your AppEUI  
+    .appKey = "00000000000000000000000000000000",       // Replace with your AppKey
+    .region = LORAWAN_REGION_US915,                     // Change to EU868 if in Europe
+    .dataRate = LORAWAN_DR_MEDIUM,
+    .adaptiveDataRate = true,
+    .transmitPower = 14,
+    .otaa = true,
+    .confirmUplinks = 1,
+    .maxRetries = 3
+};
+
+// LoRa module pins (adjust as needed for your setup)
+const int LORA_RX_PIN = 44;  // M5Dial → Grove-Wio-E5 TX
+const int LORA_TX_PIN = 43;  // M5Dial ← Grove-Wio-E5 RX
 
 // Activity tracking variables
 static uint32_t lastActivityTime = millis();
@@ -130,34 +149,29 @@ float getCachedTemperature()
 
 bool updateStove(float temperature, int hourOfWeek, bool manualToggleRequested = false)
 {
-    String statusText = "";
-
     // Handle manual toggle request
     if (manualToggleRequested)
     {
-        statusText = stove.toggleManualOverride(temperature);
+        String statusText = stove.toggleManualOverride(temperature);
 
         // Give audio feedback for safety override (non-blocking)
         if (statusText == "OFF (Safety)")
         {
             M5.Speaker.tone(4000, 100);
-            // Remove blocking delay - use tone duration instead
             M5.Speaker.tone(4000, 100);
         }
 
         statusText = "Stove: " + statusText;
+        display.showText(STOVE, statusText);
     }
     else
     {
-        // Run automatic temperature control logic
-        String updateResult = stove.update(temperature, hourOfWeek);
+        // Run automatic temperature control logic which returns display text
+        String statusText = stove.update(temperature, hourOfWeek);
         
-        // Get current status for display
-        statusText = "Stove: " + stove.getStateString();
+        // Display the status text returned by stove (includes LoRa status)
+        display.showText(STOVE, "Stove: " + statusText);
     }
-
-    // Display status
-    display.showText(STOVE, statusText);
 
     return (stove.getState() == STOVE_ON);
 }
@@ -214,6 +228,24 @@ void setup()
     delay(250);
     yield(); // Feed watchdog
     stove.setup();
+    
+    // Initialize LoRa transmitter (optional)
+    yield(); // Feed watchdog
+    Serial.println("Setting up LoRa transmitter...");
+    display.showText(STATUS_AREA, "Setting up LoRa...");
+    delay(250);
+    yield(); // Feed watchdog
+    
+    if (loraTransmitter.setup(LORA_RX_PIN, LORA_TX_PIN, loraConfig)) {
+        stove.setLoRaTransmitter(&loraTransmitter);
+        stove.setLoRaControlEnabled(true);
+        Serial.println("LoRa transmitter initialized successfully");
+        display.showText(STATUS_AREA, "LoRa transmitter ready", COLOR_GREEN);
+    } else {
+        Serial.println("LoRa transmitter initialization failed - continuing without LoRa");
+        display.showText(STATUS_AREA, "LoRa failed - local mode only", COLOR_ORANGE);
+    }
+    delay(1000); // Show LoRa status for a moment
 
     // Clear setup message and show ready status
     display.showText(STATUS_AREA, "System Ready", COLOR_MAGENTA);
