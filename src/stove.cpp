@@ -67,7 +67,7 @@ Stove::Stove(LoRaTransmitter* transmitter, float baseTemp) :
 
 Stove::~Stove()
 {
-    // RelayControl destructor will handle relay cleanup
+    // LoRa transmitter cleanup will be handled by its own destructor
 }
 
 bool Stove::loadConfigFromCSV()
@@ -186,16 +186,35 @@ float Stove::getTemperatureAdjustment(int hour)
 
 bool Stove::canChangeState()
 {
-    return relayControl.canChangeState();
+    // For LoRa transmitter: check if LoRa is available and timing constraints
+    if (loraControlEnabled && loraTransmitter && !loraTransmitter->isReady()) {
+        return false;
+    }
+    
+    // Check timing constraints
+    return (millis() - lastStateChange) >= minChangeInterval;
 }
 
 void Stove::setRelayState(bool on)
 {
-    // Use relay control for state management
-    if (on) {
-        relayControl.forceState(true);
+    // Send LoRa command to receiver for relay control
+    if (loraControlEnabled && loraTransmitter) {
+        String command = on ? CMD_STOVE_ON : CMD_STOVE_OFF;
+        String response = sendLoRaCommand(command);
+        
+        // Update state based on response
+        if (response == RESP_STOVE_ON_ACK || response == RESP_STOVE_OFF_ACK) {
+            currentState = on ? STOVE_ON : STOVE_OFF;
+            lastStateChange = millis();
+            Serial.printf("Relay command successful: %s\n", response.c_str());
+        } else {
+            Serial.printf("Relay command failed or no response: %s\n", response.c_str());
+        }
     } else {
-        relayControl.forceState(false);
+        // Local mode only (no LoRa) - just update state tracking
+        currentState = on ? STOVE_ON : STOVE_OFF;
+        lastStateChange = millis();
+        Serial.printf("Local mode: Relay state set to %s\n", on ? "ON" : "OFF");
     }
 }
 
@@ -409,9 +428,26 @@ void Stove::forceState(bool on)
 {
     Serial.printf("Stove: FORCE state to %s\n", on ? "ON" : "OFF");
     
-    relayControl.forceState(on);
-    currentState = on ? STOVE_ON : STOVE_OFF;
-    lastStateChange = millis();
+    if (loraControlEnabled && loraTransmitter) {
+        // Send LoRa command to receiver
+        String command = on ? CMD_STOVE_ON : CMD_STOVE_OFF;
+        String response = sendLoRaCommand(command);
+        
+        // Update state regardless of response for forced commands
+        currentState = on ? STOVE_ON : STOVE_OFF;
+        lastStateChange = millis();
+        
+        if (response == RESP_STOVE_ON_ACK || response == RESP_STOVE_OFF_ACK) {
+            Serial.printf("Force command successful: %s\n", response.c_str());
+        } else {
+            Serial.printf("Force command sent but no confirmation: %s\n", response.c_str());
+        }
+    } else {
+        // Local mode only (no LoRa) - just update state tracking
+        currentState = on ? STOVE_ON : STOVE_OFF;
+        lastStateChange = millis();
+        Serial.printf("Local mode: Force stove state to %s\n", on ? "ON" : "OFF");
+    }
 }
 
 String Stove::toggleManualOverride(float currentTemp)

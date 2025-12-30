@@ -33,6 +33,7 @@
 #include <M5Unified.h>
 #include <esp_task_wdt.h>
 
+#include "secrets.h"
 #include "encoder.hpp"
 #include "rtc.hpp"
 #include "temp_sensor.hpp"
@@ -46,17 +47,17 @@ void handleButtonRelease();
 
 // LoRa transmitter instance and configuration
 LoRaTransmitter loraTransmitter;
-LoRaWANConfig loraConfig = {
-    .appEUI = LORAWAN_APP_EUI,                          // From secrets.h
-    .appKey = LORAWAN_APP_KEY,                          // From secrets.h
-    .region = LORAWAN_REGION_US915,                     // Change to EU868 if in Europe
-    .dataRate = LORAWAN_DR_MEDIUM,
-    .adaptiveDataRate = true,
-    .transmitPower = 14,
-    .otaa = true,
-    .confirmUplinks = 1,
-    .maxRetries = 3
-};
+LoRaWANConfig loraConfig;
+
+void setupLoRaConfig() {
+    loraConfig.mode = LoRaCommunicationMode::P2P;
+    loraConfig.appEUI = LORAWAN_APP_EUI;
+    loraConfig.appKey = LORAWAN_APP_KEY;
+    loraConfig.region = LORAWAN_REGION_US915;
+    loraConfig.dataRate = 3;  // LORAWAN_DR_MEDIUM equivalent
+    loraConfig.adaptiveDataRate = true;
+    loraConfig.transmitPower = 14;
+}
 
 // LoRa module pins (adjust as needed for your setup)
 const int LORA_RX_PIN = 44;  // M5Dial → Grove-Wio-E5 TX
@@ -181,7 +182,7 @@ void setup()
     Serial.begin(9600);
     
     // Configure watchdog timer for longer timeout (ESP32-S3 compatible)
-    esp_task_wdt_init(10, true); // 10 second timeout, panic on timeout
+    esp_task_wdt_init(30, true); // 30 second timeout, panic on timeout
     esp_task_wdt_add(NULL); // Add current task to watchdog
     
     auto cfg = M5.config();
@@ -236,6 +237,9 @@ void setup()
     delay(250);
     yield(); // Feed watchdog
     
+    // Configure LoRa settings
+    setupLoRaConfig();
+    
     if (loraTransmitter.setup(LORA_RX_PIN, LORA_TX_PIN, loraConfig)) {
         stove.setLoRaTransmitter(&loraTransmitter);
         stove.setLoRaControlEnabled(true);
@@ -248,7 +252,7 @@ void setup()
         display.showText(STATUS_AREA, "LoRa ready: " + modeStr, COLOR_GREEN);
     } else {
         Serial.println("LoRa transmitter initialization failed - continuing without LoRa");
-        display.showText(STATUS_AREA, "LoRa failed - local mode only", COLOR_ORANGE);
+        display.showText(STATUS_AREA, "LoRa failed - local mode only", COLOR_YELLOW);
     }
     delay(1000); // Show LoRa status for a moment
 

@@ -155,8 +155,7 @@ bool RTC::synchronizeNTP() {
     
     // Stop any existing SNTP to restart fresh
     sntp_stop();
-    delay(1000); // Longer delay to ensure clean stop
-    yield();
+    for(int i = 0; i < 10; i++) { delay(100); yield(); } // 1000ms total with yields
     
     Serial.println("Configuring SNTP with timezone and servers...");
     
@@ -164,8 +163,7 @@ bool RTC::synchronizeNTP() {
     configTzTime(ntpConfig.timezone, ntpConfig.server1, ntpConfig.server2, ntpConfig.server3);
     
     // Wait for initial configuration
-    delay(3000); // Longer initial wait
-    yield();
+    for(int i = 0; i < 30; i++) { delay(100); yield(); } // 3000ms total with yields
     
     int maxAttempts = 30; // 30 * 500ms = 15 seconds max
     
@@ -179,12 +177,10 @@ bool RTC::synchronizeNTP() {
         
         // Stop and reconfigure with alternate servers
         sntp_stop();
-        delay(1000);
-        yield();
+        for(int i = 0; i < 10; i++) { delay(100); yield(); } // 1000ms with yields
         
         configTzTime(ntpConfig.timezone, alternateSvr1, alternateSvr2, alternateSvr3);
-        delay(2000);
-        yield();
+        for(int i = 0; i < 20; i++) { delay(100); yield(); } // 2000ms with yields
         
         initial_status = sntp_get_sync_status();
         Serial.printf("SNTP status with alternate servers: %d\n", initial_status);
@@ -192,8 +188,8 @@ bool RTC::synchronizeNTP() {
     
     while (sntp_get_sync_status() != SNTP_SYNC_STATUS_COMPLETED && maxAttempts > 0) {
         Serial.print('.');
-        delay(250); // Reduced polling delay
-        yield(); // Feed watchdog
+        delay(200); // Reduced polling delay
+        yield(); // Feed watchdog after every check
         maxAttempts--;
         
         // Reduced timeout to prevent long blocking
@@ -203,8 +199,8 @@ bool RTC::synchronizeNTP() {
         }
         
         // Check for persistent RESET status which indicates network problems
-        if (maxAttempts % 8 == 0) { // Check every 2 seconds (8 * 250ms)
-            yield();
+        if (maxAttempts % 5 == 0) { // Check every 1 second (5 * 200ms)
+            yield(); // Extra watchdog feeding during status checks
             sntp_sync_status_t current_status = sntp_get_sync_status();
             if (current_status == SNTP_SYNC_STATUS_RESET && maxAttempts < 32) {
                 Serial.println("\nPersistent SNTP RESET - network connectivity issues");
@@ -1006,65 +1002,6 @@ bool RTC::detectTimezoneFromLocation() {
     }
     
     return false;
-}
-
-void RTC::reportHTTPError(int errorCode) {
-    switch (errorCode) {
-        case -1:
-            Serial.println("  -> Connection refused or DNS lookup failed");
-            break;
-        case -2:
-            Serial.println("  -> Send header failed");
-            break;
-        case -3:
-            Serial.println("  -> Send payload failed");
-            break;
-        case -4:
-            Serial.println("  -> Not connected");
-            break;
-        case -5:
-            Serial.println("  -> Connection lost or TCP connection failed");
-            break;
-        case -6:
-            Serial.println("  -> No stream");
-            break;
-        case -7:
-            Serial.println("  -> No HTTP server");
-            break;
-        case -8:
-            Serial.println("  -> Too less RAM");
-            break;
-        case -9:
-            Serial.println("  -> Encoding error");
-            break;
-        case -10:
-            Serial.println("  -> Stream write error");
-            break;
-        case -11:
-            Serial.println("  -> Read timeout");
-            break;
-        case 400:
-            Serial.println("  -> Bad Request");
-            break;
-        case 401:
-            Serial.println("  -> Unauthorized");
-            break;
-        case 403:
-            Serial.println("  -> Forbidden");
-            break;
-        case 404:
-            Serial.println("  -> Not Found");
-            break;
-        case 500:
-            Serial.println("  -> Internal Server Error");
-            break;
-        case 503:
-            Serial.println("  -> Service Unavailable");
-            break;
-        default:
-            Serial.printf("  -> Unknown HTTP error: %d\n", errorCode);
-            break;
-    }
 }
 
 void RTC::reportHTTPError(int errorCode) {

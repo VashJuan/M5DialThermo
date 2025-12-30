@@ -212,4 +212,10 @@ public:
      * @return Response string, empty if both modes fail
      */
     String sendCommandWithFallback(const String &command, int maxRetries = 2);
+
+    /**
+     * @brief Get device information (DevEUI, AppEUI, etc.)
+     * @return Device info string
+     */
+    String getDeviceInfo();
 };

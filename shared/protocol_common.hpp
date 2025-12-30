@@ -22,17 +22,13 @@
 #define RESP_NACK "NACK"
 #define RESP_STOVE_ON "STOVE_ON"
 #define RESP_STOVE_OFF "STOVE_OFF"
+#define RESP_STOVE_ON_ACK "STOVE_ON_ACK"
+#define RESP_STOVE_OFF_ACK "STOVE_OFF_ACK"
+#define RESP_STATUS "STATUS_OK"
 #define RESP_PONG "PONG"
 #define RESP_ERROR "ERROR"
 #define RESP_TIMEOUT "SAFETY_TIMEOUT"
 #define RESP_UNKNOWN "ERROR_UNKNOWN_COMMAND"
-
-// Communication modes
-enum LoRaCommunicationMode
-{
-    LORA_MODE_P2P = 0,    // Point-to-point (default, simpler)
-    LORA_MODE_LORAWAN = 1 // LoRaWAN (fallback, more complex)
-};
 
 // P2P Configuration Constants
 // Based on Grove Wio E5 P2P example
@@ -45,6 +41,18 @@ enum LoRaCommunicationMode
 #define P2P_CRC "ON"                // CRC enable/disable
 #define P2P_IQ_INVERSION "OFF"      // IQ inversion
 #define P2P_SYNC_WORD "OFF"         // Sync word
+
+// P2P timeout constants
+#define P2P_TX_TIMEOUT 3000 // 3 second transmit timeout
+#define P2P_RX_TIMEOUT 5000 // 5 second receive timeout
+#define P2P_POWER 14        // P2P power in dBm (for compatibility)
+
+// Communication mode selection
+enum class LoRaCommunicationMode
+{
+    P2P = 0,    // Point-to-point communication (default)
+    LoRaWAN = 1 // LoRaWAN network communication (fallback)
+};
 
 // P2P command prefix for protocol identification
 #define P2P_MSG_PREFIX "THERMO" // 6 chars prefix to identify our messages
@@ -161,7 +169,17 @@ public:
                 command == CMD_STATUS_REQUEST ||
                 command == CMD_PING);
     }
-
+    /**
+     * @brief Validate if a response is recognized
+     * @param response Response string to validate
+     * @return true if response is valid
+     */
+    static bool isValidResponse(const String &response)
+    {
+        return (response == RESP_STOVE_ON_ACK || response == RESP_STOVE_OFF_ACK ||
+                response == RESP_PONG || response == RESP_STATUS ||
+                response.startsWith("STATUS:") || response == "SENT");
+    }
     /**
      * @brief Create a P2P message with prefix for identification
      * @param command Command string
@@ -204,9 +222,9 @@ public:
 struct LoRaWANConfig
 {
     // Communication mode selection
-    LoRaCommunicationMode mode = LORA_MODE_P2P; // Default to P2P
+    LoRaCommunicationMode mode = LoRaCommunicationMode::P2P; // Default to P2P
 
-    // P2P configuration (used when mode = LORA_MODE_P2P)
+    // P2P configuration (used when mode = LoRaCommunicationMode::P2P)
     uint16_t p2pFrequency = P2P_FREQUENCY;
     String p2pSpreadingFactor = P2P_SPREADING_FACTOR;
     String p2pBandwidth = P2P_BANDWIDTH;
@@ -217,7 +235,7 @@ struct LoRaWANConfig
     String p2pIqInversion = P2P_IQ_INVERSION;
     String p2pSyncWord = P2P_SYNC_WORD;
 
-    // LoRaWAN configuration (used when mode = LORA_MODE_LORAWAN)
+    // LoRaWAN configuration (used when mode = LoRaCommunicationMode::LoRaWAN)
     String appEUI = "0000000000000000";                 // Application EUI (8 bytes hex)
     String appKey = "00000000000000000000000000000000"; // Application Key (16 bytes hex)
     String region = LORAWAN_DEFAULT_REGION;             // Frequency region

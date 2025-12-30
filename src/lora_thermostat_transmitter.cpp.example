@@ -12,6 +12,9 @@
 #include <M5Unified.h>
 #include <esp_task_wdt.h>
 
+// Include secrets for LoRaWAN credentials
+#include "secrets.h"
+
 // Include existing thermostat components
 #include "encoder.hpp"
 #include "rtc.hpp"
@@ -26,17 +29,17 @@
 LoRaTransmitter loraTransmitter;
 
 // LoRa configuration - Update these with your actual network settings
-LoRaWANConfig loraConfig = {
-    .appEUI = "70B3D57ED0000000",                       // Replace with your AppEUI
-    .appKey = "A1B2C3D4E5F6708192A3B4C5D6E7F801",       // Replace with your AppKey
-    .region = LORAWAN_REGION_US915,                     // Change to EU868 if in Europe
-    .dataRate = LORAWAN_DR_MEDIUM,
-    .adaptiveDataRate = true,
-    .transmitPower = 14,
-    .otaa = true,
-    .confirmUplinks = 1,
-    .maxRetries = 3
-};
+LoRaWANConfig loraConfig;
+
+void setupLoRaConfig() {
+    loraConfig.mode = LoRaCommunicationMode::P2P;
+    loraConfig.appEUI = LORAWAN_APP_EUI;
+    loraConfig.appKey = LORAWAN_APP_KEY;
+    loraConfig.region = LORAWAN_REGION_US915;
+    loraConfig.dataRate = 3;  // LORAWAN_DR_MEDIUM equivalent
+    loraConfig.adaptiveDataRate = true;
+    loraConfig.transmitPower = 14;
+}
 
 // Pin definitions for LoRa module
 const int LORA_RX_PIN = 44;  // Connect to Grove-Wio-E5 TX
@@ -170,6 +173,9 @@ void setupLoRa()
     Serial.println("Initializing LoRa transmitter...");
     display.showText(STATUS_AREA, "Setting up LoRa...", COLOR_BLUE);
     
+    // Configure LoRa settings
+    setupLoRaConfig();
+    
     if (loraTransmitter.setup(LORA_RX_PIN, LORA_TX_PIN, loraConfig)) {
         Serial.println("LoRa transmitter initialized successfully");
         display.showText(STATUS_AREA, "LoRa ready", COLOR_GREEN);
@@ -249,7 +255,7 @@ void sendStoveCommand(const String& command)
         if (response == RESP_ACK || response.indexOf("STOVE") >= 0) {
             display.showText(STATUS_AREA, "LoRa: " + response, COLOR_GREEN);
         } else {
-            display.showText(STATUS_AREA, "LoRa: " + response, COLOR_ORANGE);
+            display.showText(STATUS_AREA, "LoRa: " + response, COLOR_YELLOW);
         }
     } else {
         Serial.println("LoRa command failed - no response");

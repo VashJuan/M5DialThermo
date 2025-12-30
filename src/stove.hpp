@@ -260,30 +260,12 @@ public:
     String getLastLoRaResponse() const;
 
     /**
-     * @brief Enable or disable LoRa remote control
-     * @param enable true to enable LoRa control, false to disable
-     */
-    void setLoRaControlEnabled(bool enable);
-
-    /**
-     * @brief Check if LoRa remote control is enabled
-     * @return true if LoRa control is enabled
-     */
-    bool isLoRaControlEnabled() const;
-
-    /**
      * @brief Process LoRa remote control command
      * @param command Command string from LoRa (e.g., "STOVE_ON", "STOVE_OFF")
      * @param currentTemp Current temperature for safety checks
      * @return Response string to send back via LoRa
      */
     String processLoRaCommand(const String &command, float currentTemp);
-
-    /**
-     * @brief Get relay control instance (for direct access if needed)
-     * @return Reference to RelayControl instance
-     */
-    RelayControl &getRelayControl();
 };
 
 // Declare a global instance of the Stove class
