@@ -285,11 +285,11 @@ String Stove::update(float currentTemp, int hourOfWeek)
         // Include temperature difference in status display for better feedback
         statusDisplayText = String(desiredTemp, 1) + "F goal;";
         if (abs(tempDiff) > 0.1) {
-            statusDisplayText += ", " + String(tempDiff > 0 ? "+" : "") + String(tempDiff, 1) + "F";
+            statusDisplayText += ", " + String(tempDiff > 0 ? "+" : "") + String(tempDiff, 1) + "F off";
         }
         
         if (!(loopCounter % 100)) {
-            Serial.printf("  Current: %.1f°F, Goal: %.1f°F, Delta: %.1f°F\n", 
+            Serial.printf("  Current: %.1f°F, Goal: %.1f°F, Delta: %.1f°FΔ\n", 
                           currentTemp, desiredTemp, tempDiff);
         }
     }
@@ -320,7 +320,7 @@ String Stove::turnOn()
         lastStateChange = millis();
         statusDisplayText = "ON (LoRa)";
         Serial.println("Stove: Remote turned ON");
-        return "Stove: Remote turned ON";
+        return "Remote turned ON";
     } else {
         statusDisplayText = "ON Failed: " + response;
         Serial.println("Stove: Failed to turn ON - " + response);
@@ -350,10 +350,10 @@ String Stove::turnOff()
         lastStateChange = millis();
         statusDisplayText = "OFF (LoRa)";
         Serial.println("Stove: Remote turned OFF");
-        return "Stove: Remote turned OFF";
+        return "Remote turned OFF";
     } else {
         statusDisplayText = "OFF Failed: " + response;
-        Serial.println("Stove: Failed to turn OFF - " + response);
+        Serial.println("Failed to turn OFF - " + response);
         return "Failed: " + response;
     }
 }
@@ -378,7 +378,7 @@ float Stove::getCurrentDesiredTemperature()
 void Stove::setBaseTemperature(float temp)
 {
     baseTemperature = temp;
-    Serial.printf("Stove: Base temperature set to %.1f°F\n", baseTemperature);
+    Serial.printf("Base temperature set to %.1f°F\n", baseTemperature);
 }
 
 float Stove::getBaseTemperature() const
@@ -389,7 +389,7 @@ float Stove::getBaseTemperature() const
 void Stove::setEnabled(bool enable)
 {
     enabled = enable;
-    Serial.printf("Stove: Automatic control %s\n", enable ? "ENABLED" : "DISABLED");
+    Serial.printf("Automatic control %s\n", enable ? "ENABLED" : "DISABLED");
     
     if (!enable && (currentState == STOVE_ON)) {
         // Turn off stove when disabling automatic control

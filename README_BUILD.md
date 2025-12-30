@@ -35,12 +35,12 @@
 
 1. **Board Settings:**
 
-   - Board: "M5Stack-CoreS3" or "ESP32S3 Dev Module"
+   - Board: "STAMP-S3" or "ESP32S3 Dev Module"
    - Port: COM4
    - Upload Speed: 921600
    - Flash Mode: QIO
-   - Flash Size: 8MB
-   - Partition Scheme: Default 8MB
+   - Flash Size: 4MB
+   - Partition Scheme: Default
 
 2. **Required Libraries:**
 

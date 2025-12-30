@@ -162,7 +162,7 @@ bool updateStove(float temperature, int hourOfWeek, bool manualToggleRequested =
             M5.Speaker.tone(4000, 100);
         }
 
-        statusText = "Stove: " + statusText;
+        statusText = statusText;
         display.showText(STOVE, statusText);
     }
     else
@@ -171,7 +171,7 @@ bool updateStove(float temperature, int hourOfWeek, bool manualToggleRequested =
         String statusText = stove.update(temperature, hourOfWeek);
         
         // Display the status text returned by stove (includes LoRa status)
-        display.showText(STOVE, "Stove: " + statusText);
+        display.showText(STOVE, statusText);
     }
 
     return (stove.getState() == STOVE_ON);
@@ -376,7 +376,7 @@ void loop()
         
         // Update stove display immediately when temperature is polled
         if (timeForTempPoll) {
-            String stoveStatus = "Stove: " + stove.getDisplayStatusText();
+            String stoveStatus =  stove.getDisplayStatusText();
             display.showText(STOVE, stoveStatus);
         }
     }
@@ -389,10 +389,10 @@ void loop()
     if (millis() - lastDisplayUpdate > (isInactive ? 10000 : 2000)) { // Update less frequently when inactive
         String currentState = stove.getStateString();
         if (currentState.startsWith("PENDING")) {
-            display.showText(STOVE, "Stove: " + currentState);
+            display.showText(STOVE,  currentState);
         } else if (!timeForTempPoll) {
             // Update stove status even when not polling temp, but less frequently
-            String stoveStatus = "Stove: " + stove.getDisplayStatusText();
+            String stoveStatus =  stove.getDisplayStatusText();
             display.showText(STOVE, stoveStatus);
         }
         
@@ -402,7 +402,7 @@ void loop()
             if (!isnan(displayTemp) && tempSensor.isValidReading(displayTemp)) {
                 float desiredTemp = stove.getCurrentDesiredTemperature();
                 float tempDiff = desiredTemp - displayTemp;
-                String statusMsg = String(desiredTemp, 1) + "F goal, Δ " + String(tempDiff, 1) + "F";
+                String statusMsg = String(desiredTemp, 1) + "F goal, " + String(tempDiff, 1) + "F off";
                 if (isInactive) {
                     statusMsg += " (power save)";
                 }
@@ -442,13 +442,13 @@ void loop()
             tempSensor.getLastTemperatureF(); // Cache the last temperature reading
             delay(100); // Allow any pending operations to complete
             tempSensor.shutdown();
-            Serial.printf("Temperature sensor shutdown after poll at %s. Sleeping for 2 minutes...\n", rtc.getFormattedTime().c_str());
+            Serial.printf("Temperature sensor was shutdown at %s for 2 minutes...\n", rtc.getFormattedTime().c_str());
         }
         
         // Enter deep power save mode after being in power save mode for at least 30 seconds
         if (!deepPowerSaveMode && (millis() - powerSaveModeStartTime > 30000)) {
             deepPowerSaveMode = true;
-            Serial.println("Entering deep power save mode - temperature polling every 2 minutes");
+            Serial.println("Entering deep power save mode - for 2 minutes");
         }
         
         delay(1000); // Sleep longer between loops when inactive
@@ -461,13 +461,13 @@ void loop()
             powerSaveMode = false;
             deepPowerSaveMode = false;
             powerSaveModeStartTime = 0;
-            Serial.println("Exiting power save mode (CPU 80MHz, active temp monitoring)");
+            Serial.println("Exit power save mode (CPU 80MHz) to check temperature");
         }
         
         // Ensure sensor is awake during active periods
         if (!tempSensor.getAwakeStatus()) {
             tempSensor.wakeUp();
-            Serial.println("Temperature sensor woken for active period");
+            Serial.println("Temperature sensor woken");
         }
     }
 
