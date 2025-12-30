@@ -402,7 +402,7 @@ void loop()
             if (!isnan(displayTemp) && tempSensor.isValidReading(displayTemp)) {
                 float desiredTemp = stove.getCurrentDesiredTemperature();
                 float tempDiff = desiredTemp - displayTemp;
-                String statusMsg = String(desiredTemp, 1) + "F target, diff " + String(tempDiff, 1) + "F";
+                String statusMsg = String(desiredTemp, 1) + "F goal, Δ " + String(tempDiff, 1) + "F";
                 if (isInactive) {
                     statusMsg += " (power save)";
                 }
