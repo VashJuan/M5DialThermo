@@ -1,0 +1,651 @@
+/**
+ * @file lora_transmitter.cpp
+ * @brief LoRaWAN transmitter implementation for Grove-Wio-E5
+ * @version 1.0.0
+ * @date 2025-12-30
+ */
+
+#include "lora_transmitter.hpp"
+
+LoRaTransmitter::LoRaTransmitter() : 
+    loraSerial(nullptr), 
+    isInitialized(false),
+    lastTransmissionTime(0),
+    lastAckTime(0),
+    successfulTransmissions(0),
+    failedTransmissions(0),
+    totalRetries(0),
+    lastError("")
+{
+    // Constructor
+}
+
+LoRaTransmitter::~LoRaTransmitter()
+{
+    if (loraSerial) {
+        loraSerial->end();
+    }
+}
+
+bool LoRaTransmitter::setup(int rxPin, int txPin, const LoRaWANConfig &loraConfig)
+{
+    this->rxPin = rxPin;
+    this->txPin = txPin;
+    this->config = loraConfig;
+    
+    Serial.printf("Setting up LoRa transmitter on pins RX:%d, TX:%d\n", rxPin, txPin);
+    
+    // Initialize UART for Grove-Wio-E5
+    loraSerial = new HardwareSerial(1); // Use UART1
+    loraSerial->begin(9600, SERIAL_8N1, rxPin, txPin);
+    
+    delay(2000); // Allow module to boot
+    
+    // Test communication
+    clearSerialBuffer();
+    if (!sendATCommand("AT", "OK", 3000)) {
+        lastError = "Failed to communicate with Grove-Wio-E5 module";
+        Serial.println(lastError);
+        return false;
+    }
+    
+    Serial.println("Grove-Wio-E5 communication established");
+    
+    // Reset module to ensure clean state
+    if (!reset()) {
+        lastError = "Failed to reset Grove-Wio-E5 module";
+        Serial.println(lastError);
+        return false;
+    }
+    
+    // Configure LoRaWAN settings
+    if (!configureLoRaWAN()) {
+        lastError = "Failed to configure LoRaWAN settings";
+        Serial.println(lastError);
+        return false;
+    }
+    
+    // Join network
+    if (!joinNetwork()) {
+        lastError = "Failed to join LoRaWAN network";
+        Serial.println(lastError);
+        return false;
+    }
+    
+    isInitialized = true;
+    Serial.println("LoRa transmitter setup complete");
+    
+    // Clear statistics
+    clearStatistics();
+    
+    return true;
+}
+
+bool LoRaTransmitter::configureLoRaWAN()
+{
+    Serial.println("Configuring LoRaWAN transmitter settings...");
+    
+    // Set to LoRaWAN mode (OTAA if configured, otherwise ABP)
+    String modeCommand = config.otaa ? "AT+MODE=LWOTAA" : "AT+MODE=LWABP";
+    if (!sendATCommand(modeCommand, "OK")) {
+        return false;
+    }
+    
+    // Set region
+    String regionCommand = "AT+DR=" + config.region;
+    if (!sendATCommand(regionCommand, "OK")) {
+        return false;
+    }
+    
+    // Set data rate
+    String drCommand = "AT+DR=" + String(config.dataRate);
+    if (!sendATCommand(drCommand, "OK")) {
+        return false;
+    }
+    
+    // Configure OTAA keys if using OTAA
+    if (config.otaa) {
+        // Set AppEUI
+        String appEuiCommand = "AT+ID=APPEUI," + config.appEUI;
+        if (!sendATCommand(appEuiCommand, "OK")) {
+            return false;
+        }
+        
+        // Set AppKey
+        String appKeyCommand = "AT+KEY=APPKEY," + config.appKey;
+        if (!sendATCommand(appKeyCommand, "OK")) {
+            return false;
+    }
+    }
+    
+    // Set device class
+    if (!sendATCommand("AT+CLASS=A", "OK")) {
+        return false;
+    }
+    
+    // Set confirmed/unconfirmed uplinks
+    String confirmedCommand = "AT+CFM=" + String(config.confirmUplinks);
+    if (!sendATCommand(confirmedCommand, "OK")) {
+        return false;
+    }
+    
+    // Set transmit power
+    String powerCommand = "AT+POWER=" + String(config.transmitPower);
+    if (!sendATCommand(powerCommand, "OK")) {
+        return false;
+    }
+    
+    // Enable/disable ADR
+    String adrCommand = "AT+ADR=" + (config.adaptiveDataRate ? String("ON") : String("OFF"));
+    if (!sendATCommand(adrCommand, "OK")) {
+        return false;
+    }
+    
+    Serial.println("LoRaWAN transmitter configuration complete");
+    return true;
+}
+
+bool LoRaTransmitter::joinNetwork()
+{
+    if (!config.otaa) {
+        Serial.println("Using ABP mode - no join required");
+        return true;
+    }
+    
+    Serial.println("Attempting to join LoRaWAN network...");
+    
+    // Enhanced join process with multiple attempts (inspired by Grove-Wio-E5 examples)
+    int maxAttempts = 3;
+    for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+        Serial.printf("Join attempt %d/%d\n", attempt, maxAttempts);
+        
+        // Clear buffer before join attempt
+        clearSerialBuffer();
+        
+        // Attempt to join network with timing measurement
+        unsigned long joinTime = 0;
+        if (!sendATCommandWithTiming("AT+JOIN", "OK", 3000, joinTime)) {
+            Serial.printf("Join command failed on attempt %d (took %lu ms)\n", attempt, joinTime);
+            if (attempt < maxAttempts) {
+                delay(5000); // Wait before retry
+                continue;
+            }
+            return false;
+        }
+        
+        // Wait for join confirmation (this can take up to 30 seconds)
+        unsigned long startTime = millis();
+        bool joinStarted = false;
+        
+        while (millis() - startTime < LORAWAN_JOIN_TIMEOUT) {
+            String response = readResponse(1000);
+            
+            if (response.indexOf("+JOIN: Start") >= 0) {
+                joinStarted = true;
+                Serial.println("Join process started...");
+            } else if (response.indexOf("+JOIN: Network joined") >= 0) {
+                Serial.println("Successfully joined LoRaWAN network");
+                
+                // Optional: Enable auto low power mode after successful join
+                setAutoLowPowerMode(true);
+                
+                return true;
+            } else if (response.indexOf("+JOIN: Join failed") >= 0) {
+                Serial.printf("Join failed on attempt %d\n", attempt);
+                break; // Exit inner loop to try again
+            }
+            delay(1000);
+        }
+        
+        if (!joinStarted) {
+            Serial.printf("Join process never started on attempt %d\n", attempt);
+        } else {
+            Serial.printf("Join timeout on attempt %d\n", attempt);
+        }
+        
+        if (attempt < maxAttempts) {
+            Serial.println("Waiting before next join attempt...");
+            delay(10000); // Wait longer between attempts
+        }
+    }
+    
+    Serial.println("All join attempts failed");
+    return false;
+}
+
+String LoRaTransmitter::sendCommand(const String &command, uint8_t port, bool confirmed, int maxRetries)
+{
+    if (!isInitialized) {
+        lastError = "Transmitter not initialized";
+        Serial.println(lastError);
+        return "";
+    }
+    
+    Serial.printf("Sending command: %s (port: %d, confirmed: %s)\n", 
+                  command.c_str(), port, confirmed ? "yes" : "no");
+    
+    // Validate command
+    if (!ProtocolHelper::isValidCommand(command)) {
+        lastError = "Invalid command: " + command;
+        Serial.println(lastError);
+        failedTransmissions++;
+        return "";
+    }
+    
+    // Create hex message
+    String hexMessage = createHexMessage(command, port);
+    
+    // Attempt transmission with retries
+    for (int attempt = 0; attempt <= maxRetries; attempt++) {
+        if (attempt > 0) {
+            Serial.printf("Retry attempt %d/%d\n", attempt, maxRetries);
+            totalRetries++;
+            delay(2000); // Wait before retry
+        }
+        
+        // Record transmission start time
+        lastTransmissionTime = millis();
+        
+        // Send message
+        if (sendMessage(hexMessage, confirmed)) {
+            // Wait for response if confirmed message
+            if (confirmed) {
+                unsigned long responseStartTime = millis();
+                while (millis() - responseStartTime < LORAWAN_RX_TIMEOUT) {
+                    if (loraSerial->available()) {
+                        String response = readResponse(1000);
+                        
+                        // Look for downlink message indicator
+                        int msgIndex = response.indexOf("+MSG:");
+                        if (msgIndex >= 0) {
+                            // Parse the response message
+                            int rxIndex = response.indexOf("RX:", msgIndex);
+                            if (rxIndex >= 0) {
+                                int startQuote = response.indexOf('"', rxIndex);
+                                int endQuote = response.indexOf('"', startQuote + 1);
+                                
+                                if (startQuote >= 0 && endQuote >= 0) {
+                                    String hexData = response.substring(startQuote + 1, endQuote);
+                                    String decodedResponse = ProtocolHelper::hexToAscii(hexData);
+                                    
+                                    Serial.printf("Received response: %s\n", decodedResponse.c_str());
+                                    
+                                    // Validate response
+                                    if (ProtocolHelper::isValidResponse(decodedResponse)) {
+                                        lastAckTime = millis();
+                                        successfulTransmissions++;
+                                        return decodedResponse;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    delay(100);
+                }
+                
+                Serial.println("No response received within timeout");
+            } else {
+                // Unconfirmed message - consider successful if sent
+                successfulTransmissions++;
+                return "SENT"; // Indicate message was sent (no response expected)
+            }
+        }
+    }
+    
+    lastError = "Failed to send command after " + String(maxRetries + 1) + " attempts";
+    Serial.println(lastError);
+    failedTransmissions++;
+    return "";
+}
+
+bool LoRaTransmitter::ping()
+{
+    String response = sendCommand(CMD_PING, LORAWAN_PORT_PING, true, 2);
+    return (response == RESP_PONG);
+}
+
+String LoRaTransmitter::requestStatus()
+{
+    return sendCommand(CMD_STATUS_REQUEST, LORAWAN_PORT_STATUS, true, 2);
+}
+
+String LoRaTransmitter::getSignalQuality()
+{
+    if (!isInitialized) {
+        return "Not initialized";
+    }
+    
+    String qualityInfo = "";
+    
+    // Get RSSI
+    clearSerialBuffer();
+    if (sendATCommand("AT+RSSI", "", 3000)) {
+        String rssiResponse = readResponse(2000);
+        qualityInfo += "RSSI: " + rssiResponse;
+    }
+    
+    // Get SNR if available
+    clearSerialBuffer();
+    if (sendATCommand("AT+SNR", "", 3000)) {
+        String snrResponse = readResponse(2000);
+        if (snrResponse.length() > 0) {
+            qualityInfo += ", SNR: " + snrResponse;
+        }
+    }
+    
+    // Get data rate info
+    clearSerialBuffer();
+    if (sendATCommand("AT+DR", "", 3000)) {
+        String drResponse = readResponse(2000);
+        if (drResponse.length() > 0) {
+            qualityInfo += ", DR: " + drResponse;
+        }
+    }
+    
+    return qualityInfo.length() > 0 ? qualityInfo : "Error reading signal quality";
+}
+
+bool LoRaTransmitter::isReady()
+{
+    return isInitialized && sendATCommand("AT", "OK", 1000);
+}
+
+bool LoRaTransmitter::reset()
+{
+    Serial.println("Resetting Grove-Wio-E5 module...");
+    
+    if (!sendATCommand("AT+RESET", "", 2000)) {
+        return false;
+    }
+    
+    delay(3000); // Wait for reset to complete
+    
+    // Clear any boot messages
+    clearSerialBuffer();
+    
+    // Test communication after reset
+    return sendATCommand("AT", "OK", 3000);
+}
+
+// Private helper methods
+
+bool LoRaTransmitter::sendATCommand(const String &command, const String &expectedResponse, int timeout)
+{
+    if (!loraSerial) {
+        return false;
+    }
+    
+    // Enhanced buffer clearing (inspired by Grove-Wio-E5 examples)
+    clearSerialBuffer();
+    delay(50); // Allow any pending data to arrive
+    clearSerialBuffer(); // Clear again for better reliability
+    
+    // Send command
+    loraSerial->println(command);
+    Serial.printf("TX: %s\n", command.c_str());
+    
+    if (expectedResponse.length() == 0) {
+        return true; // No response expected
+    }
+    
+    // Wait for response
+    String response = readResponse(timeout);
+    Serial.printf("RX: %s\n", response.c_str());
+    
+    // More flexible response checking
+    bool success = (response.indexOf(expectedResponse) >= 0) || 
+                   (expectedResponse == "OK" && response.indexOf("+OK") >= 0);
+    
+    if (!success && expectedResponse != "") {
+        Serial.printf("Command failed - expected '%s' but got '%s'\n", 
+                     expectedResponse.c_str(), response.c_str());
+    }
+    
+    return success;
+}
+
+bool LoRaTransmitter::sendATCommandWithTiming(const String &command, const String &expectedResponse, int timeout, unsigned long &commandTime)
+{
+    unsigned long startTime = millis();
+    bool result = sendATCommand(command, expectedResponse, timeout);
+    commandTime = millis() - startTime;
+    return result;
+}
+
+String LoRaTransmitter::readResponse(int timeout)
+{
+    if (!loraSerial) {
+        return "";
+    }
+    
+    String response = "";
+    unsigned long startTime = millis();
+    
+    while (millis() - startTime < timeout) {
+        if (loraSerial->available()) {
+            char c = loraSerial->read();
+            response += c;
+            
+            // Reset timeout on new data
+            startTime = millis();
+        }
+        delay(10);
+    }
+    
+    response.trim();
+    return response;
+}
+
+void LoRaTransmitter::clearSerialBuffer()
+{
+    if (!loraSerial) {
+        return;
+    }
+    
+    // Enhanced buffer clearing with timeout (inspired by Grove-Wio-E5 examples)
+    unsigned long startTime = millis();
+    while (loraSerial->available() && (millis() - startTime < 1000)) {
+        loraSerial->read();
+        delay(1); // Small delay to ensure all data is read
+    }
+}
+
+String LoRaTransmitter::createHexMessage(const String &command, uint8_t port)
+{
+    // Use protocol helper to create the message
+    return ProtocolHelper::createMessage(command, port);
+}
+
+bool LoRaTransmitter::sendMessage(const String &hexMessage, bool confirmed)
+{
+    // Construct AT command for sending hex message
+    String command = "AT+CMSGHEX=\"" + hexMessage + "\"";
+    
+    // Use enhanced timing measurements (inspired by Grove-Wio-E5 time measures example)
+    unsigned long txTime = 0, ackTime = 0;
+    
+    if (!sendATCommandWithTiming(command, "Done", LORAWAN_TX_TIMEOUT, txTime)) {
+        return false;
+    }
+    
+    Serial.printf("Message sent in %lu ms\n", txTime);
+    
+    // If confirmed message, wait for transmission completion and ACK
+    if (confirmed) {
+        if (waitForTransmissionComplete(txTime, ackTime)) {
+            Serial.printf("ACK received in %lu ms\n", ackTime);
+            return true;
+        } else {
+            Serial.println("No ACK received or transmission failed");
+            return false;
+        }
+    }
+    
+    return true; // Unconfirmed message sent successfully
+}
+
+bool LoRaTransmitter::waitForTransmissionComplete(unsigned long &txTime, unsigned long &ackTime)
+{
+    unsigned long startTime = millis();
+    bool transmissionStarted = false;
+    bool waitingForAck = false;
+    unsigned long ackStartTime = 0;
+    
+    while (millis() - startTime < LORAWAN_TX_TIMEOUT + LORAWAN_RX_TIMEOUT) {
+        String response = readResponse(1000);
+        
+        // Look for transmission start
+        if (response.indexOf("Start") >= 0) {
+            transmissionStarted = true;
+            txTime = millis() - startTime;
+        }
+        
+        // Look for "Wait ACK" indication
+        if (response.indexOf("Wait ACK") >= 0) {
+            waitingForAck = true;
+            ackStartTime = millis();
+        }
+        
+        // Look for ACK received
+        if (response.indexOf("ACK Received") >= 0) {
+            if (ackStartTime > 0) {
+                ackTime = millis() - ackStartTime;
+            }
+            return true;
+        }
+        
+        // Check for transmission failure
+        if (response.indexOf("TX Failed") >= 0 || response.indexOf("No ACK") >= 0) {
+            return false;
+        }
+        
+        delay(100);
+    }
+    
+    return false; // Timeout
+}
+
+bool LoRaTransmitter::enterLowPowerMode()
+{
+    Serial.println("Entering LoRa transmitter low power mode...");
+    return sendATCommand("AT+LOWPOWER", "OK", 3000);
+}
+
+bool LoRaTransmitter::wakeUp()
+{
+    Serial.println("Waking up LoRa transmitter...");
+    // Send any character to wake up
+    if (loraSerial) {
+        loraSerial->println("AT");
+        delay(100);
+    }
+    return sendATCommand("AT", "OK", 3000);
+}
+
+bool LoRaTransmitter::setAutoLowPowerMode(bool enable)
+{
+    String command = "AT+LOWPOWER=AUTOMODE,";
+    command += enable ? "ON" : "OFF";
+    Serial.printf("Setting transmitter auto low power mode: %s\n", enable ? "ON" : "OFF");
+    return sendATCommand(command, "OK", 3000);
+}
+
+String LoRaTransmitter::getStatistics()
+{
+    String stats = "LoRa Transmitter Statistics:\n";
+    stats += "Successful transmissions: " + String(successfulTransmissions) + "\n";
+    stats += "Failed transmissions: " + String(failedTransmissions) + "\n";
+    stats += "Total retries: " + String(totalRetries) + "\n";
+    
+    if (successfulTransmissions + failedTransmissions > 0) {
+        float successRate = (float)successfulTransmissions / (successfulTransmissions + failedTransmissions) * 100.0;
+        stats += "Success rate: " + String(successRate, 1) + "%\n";
+    }
+    
+    if (lastTransmissionTime > 0) {
+        stats += "Last transmission: " + String((millis() - lastTransmissionTime) / 1000) + " seconds ago\n";
+    }
+    
+    if (lastAckTime > 0) {
+        stats += "Last ACK: " + String((millis() - lastAckTime) / 1000) + " seconds ago\n";
+    }
+    
+    return stats;
+}
+
+String LoRaTransmitter::getLastError()
+{
+    return lastError;
+}
+
+void LoRaTransmitter::clearStatistics()
+{
+    successfulTransmissions = 0;
+    failedTransmissions = 0;
+    totalRetries = 0;
+    lastTransmissionTime = 0;
+    lastAckTime = 0;
+    lastError = "";
+}
+
+bool LoRaTransmitter::setConfiguration(const LoRaWANConfig &loraConfig)
+{
+    config = loraConfig;
+    
+    if (isInitialized) {
+        // Reconfigure if already initialized
+        return configureLoRaWAN();
+    }
+    
+    return true; // Configuration will be applied during setup
+}
+
+LoRaWANConfig LoRaTransmitter::getConfiguration()
+{
+    return config;
+}
+
+bool LoRaTransmitter::isJoined()
+{
+    // Check join status by attempting a simple query
+    return sendATCommand("AT+DADDR", "", 3000);
+}
+
+bool LoRaTransmitter::rejoin()
+{
+    Serial.println("Force rejoin to LoRaWAN network...");
+    return joinNetwork();
+}
+
+bool LoRaTransmitter::sendRawHex(const String &hexData, uint8_t port, bool confirmed)
+{
+    String command = "AT+CMSGHEX=\"" + hexData + "\"";
+    return sendATCommand(command, "Done", LORAWAN_TX_TIMEOUT);
+}
+
+String LoRaTransmitter::getDeviceInfo()
+{
+    String info = "";
+    
+    // Get device ID information
+    clearSerialBuffer();
+    if (sendATCommand("AT+ID", "", 3000)) {
+        String idResponse = readResponse(2000);
+        info += "Device ID: " + idResponse + "\n";
+    }
+    
+    // Get version information
+    clearSerialBuffer();
+    if (sendATCommand("AT+VER", "", 3000)) {
+        String verResponse = readResponse(2000);
+        info += "Firmware: " + verResponse + "\n";
+    }
+    
+    // Get current configuration
+    info += "Region: " + config.region + "\n";
+    info += "Data Rate: " + String(config.dataRate) + "\n";
+    info += "TX Power: " + String(config.transmitPower) + " dBm\n";
+    info += "Mode: " + (config.otaa ? String("OTAA") : String("ABP")) + "\n";
+    
+    return info;
+}

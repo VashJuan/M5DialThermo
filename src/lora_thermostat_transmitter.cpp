@@ -1,0 +1,560 @@
+/**
+ * @file lora_thermostat_transmitter.cpp
+ * @brief Example implementation of M5Dial thermostat with LoRa transmitter
+ * @version 1.0.0
+ * @date 2025-12-30
+ *
+ * This example shows how to integrate the LoRaTransmitter class with the existing
+ * thermostat code to enable remote stove control via LoRaWAN.
+ */
+
+#include <Arduino.h>
+#include <M5Unified.h>
+#include <esp_task_wdt.h>
+
+// Include existing thermostat components
+#include "encoder.hpp"
+#include "rtc.hpp"
+#include "temp_sensor.hpp"
+#include "stove.hpp"
+#include "display.hpp"
+
+// Include new LoRa transmitter
+#include "lora_transmitter.hpp"
+
+// LoRa transmitter instance
+LoRaTransmitter loraTransmitter;
+
+// LoRa configuration - Update these with your actual network settings
+LoRaWANConfig loraConfig = {
+    .appEUI = "70B3D57ED0000000",                       // Replace with your AppEUI
+    .appKey = "A1B2C3D4E5F6708192A3B4C5D6E7F801",       // Replace with your AppKey
+    .region = LORAWAN_REGION_US915,                     // Change to EU868 if in Europe
+    .dataRate = LORAWAN_DR_MEDIUM,
+    .adaptiveDataRate = true,
+    .transmitPower = 14,
+    .otaa = true,
+    .confirmUplinks = 1,
+    .maxRetries = 3
+};
+
+// Pin definitions for LoRa module
+const int LORA_RX_PIN = 44;  // Connect to Grove-Wio-E5 TX
+const int LORA_TX_PIN = 43;  // Connect to Grove-Wio-E5 RX
+
+// Remote control settings
+bool remoteControlEnabled = false;
+unsigned long lastLoRaHeartbeat = 0;
+const unsigned long LORA_HEARTBEAT_INTERVAL = 5 * 60 * 1000; // 5 minutes
+
+// Forward declarations
+void setupLoRa();
+void handleLoRaOperations();
+void sendStoveCommand(const String& command);
+void sendStatusUpdate();
+void handleRemoteControlToggle();
+
+// Activity tracking variables (existing from original code)
+static uint32_t lastActivityTime = millis();
+bool recentActivity = false;
+int activityTimeout = 3000; // 3 seconds
+
+// Temperature monitoring constants (existing from original code)
+static const unsigned long TEMP_POLL_INTERVAL = 2 * 60 * 1000; // 2 minutes
+static const unsigned long TEMP_POLL_ACTIVE_INTERVAL = 5 * 1000; // 5 seconds when active
+static unsigned long lastTempPoll = 0;
+static bool deepPowerSaveMode = false;
+
+// Hardware pin definitions (existing from original code)
+const int portA[] = {15, 13}; // G15 = SCL, G13 = SDA
+const int portB[] = {1, 2};   // G1 = SCL, G2 = SDA
+
+int updateTime()
+{
+    rtc.update();
+    String formattedTime = rtc.getFormattedDate();
+    
+    // Check if we have a valid time or if RTC is still initializing
+    if (formattedTime.startsWith("RTC not") || formattedTime.startsWith("Time unavailable")) {
+        display.showText(TIME, "Initializing clock...", COLOR_WHITE);
+        
+        static bool errorMessageShown = false;
+        if (!errorMessageShown) {
+            display.showText(STATUS_AREA, "Clock not synced - restart device", COLOR_RED);
+            errorMessageShown = true;
+        }
+        
+        return -1; // Invalid time, return error code
+    }
+    
+    // Clear any previous error messages
+    static bool errorCleared = false;
+    if (!errorCleared) {
+        display.showText(STATUS_AREA, "");
+        errorCleared = true;
+    }
+    
+    display.showText(TIME, formattedTime);
+    return rtc.getDayOfWeek() * 24 + rtc.getHour(); // hour of the week
+}
+
+float updateTemperature()
+{
+    float temperature = tempSensor.readTemperatureFahrenheit();
+
+    if (!tempSensor.isValidReading(temperature))
+    {
+        Serial.println("Invalid temperature reading");
+        display.showText(STATUS_AREA, "Temperature Sensor Error", COLOR_RED);
+        return 999.0;
+    }
+
+    display.showText(TEMP, String(temperature, 1) + " F", COLOR_WHITE);
+    return temperature;
+}
+
+float getCachedTemperature()
+{
+    float temperature = tempSensor.getLastTemperatureF();
+    
+    if (isnan(temperature)) {
+        return updateTemperature();
+    }
+    
+    display.showText(TEMP, String(temperature, 1) + " F (cached)", COLOR_WHITE);
+    return temperature;
+}
+
+bool updateStove(float temperature, int hourOfWeek, bool manualToggleRequested = false)
+{
+    String statusText = "";
+
+    // Handle manual toggle request
+    if (manualToggleRequested)
+    {
+        statusText = stove.toggleManualOverride(temperature);
+
+        // Give audio feedback for safety override
+        if (statusText == "OFF (Safety)")
+        {
+            M5.Speaker.tone(4000, 100);
+            M5.Speaker.tone(4000, 100);
+        }
+
+        statusText = "Stove: " + statusText;
+        
+        // Send LoRa command if remote control is enabled
+        if (remoteControlEnabled) {
+            if (statusText.indexOf("ON") >= 0) {
+                sendStoveCommand(CMD_STOVE_ON);
+            } else if (statusText.indexOf("OFF") >= 0) {
+                sendStoveCommand(CMD_STOVE_OFF);
+            }
+        }
+    }
+    else
+    {
+        // Run automatic temperature control logic
+        String updateResult = stove.update(temperature, hourOfWeek);
+        statusText = "Stove: " + stove.getStateString();
+    }
+
+    // Display status
+    display.showText(STOVE, statusText);
+
+    return (stove.getState() == STOVE_ON);
+}
+
+void setupLoRa()
+{
+    Serial.println("Initializing LoRa transmitter...");
+    display.showText(STATUS_AREA, "Setting up LoRa...", COLOR_BLUE);
+    
+    if (loraTransmitter.setup(LORA_RX_PIN, LORA_TX_PIN, loraConfig)) {
+        Serial.println("LoRa transmitter initialized successfully");
+        display.showText(STATUS_AREA, "LoRa ready", COLOR_GREEN);
+        
+        // Enable LoRa control on the stove
+        stove.setLoRaControlEnabled(true);
+        
+        // Send initial ping
+        if (loraTransmitter.ping()) {
+            Serial.println("Initial LoRa ping successful");
+            remoteControlEnabled = true;
+            display.showText(STATUS_AREA, "LoRa connected", COLOR_GREEN);
+        } else {
+            Serial.println("Initial LoRa ping failed - remote control disabled");
+            display.showText(STATUS_AREA, "LoRa no response", COLOR_YELLOW);
+        }
+        
+        lastLoRaHeartbeat = millis();
+    } else {
+        Serial.println("LoRa transmitter initialization failed");
+        display.showText(STATUS_AREA, "LoRa setup failed", COLOR_RED);
+        remoteControlEnabled = false;
+    }
+    
+    delay(2000); // Show status for a moment
+}
+
+void handleLoRaOperations()
+{
+    static unsigned long lastLoRaCheck = 0;
+    
+    // Check LoRa operations every 10 seconds when active, every minute when inactive
+    unsigned long interval = recentActivity ? 10000 : 60000;
+    
+    if (millis() - lastLoRaCheck < interval) {
+        return;
+    }
+    
+    lastLoRaCheck = millis();
+    
+    // Periodic heartbeat
+    if (millis() - lastLoRaHeartbeat > LORA_HEARTBEAT_INTERVAL) {
+        Serial.println("Sending LoRa heartbeat...");
+        
+        if (loraTransmitter.ping()) {
+            Serial.println("LoRa heartbeat successful");
+            remoteControlEnabled = true;
+        } else {
+            Serial.println("LoRa heartbeat failed");
+            remoteControlEnabled = false;
+        }
+        
+        lastLoRaHeartbeat = millis();
+    }
+    
+    // Send periodic status update if remote control is enabled
+    if (remoteControlEnabled && recentActivity) {
+        sendStatusUpdate();
+    }
+}
+
+void sendStoveCommand(const String& command)
+{
+    if (!remoteControlEnabled) {
+        Serial.println("Remote control disabled - not sending LoRa command");
+        return;
+    }
+    
+    Serial.printf("Sending LoRa command: %s\n", command.c_str());
+    
+    String response = loraTransmitter.sendCommand(command, LORAWAN_PORT_CONTROL, true, 2);
+    
+    if (response.length() > 0) {
+        Serial.printf("LoRa command response: %s\n", response.c_str());
+        
+        // Update display with LoRa status
+        if (response == RESP_ACK || response.indexOf("STOVE") >= 0) {
+            display.showText(STATUS_AREA, "LoRa: " + response, COLOR_GREEN);
+        } else {
+            display.showText(STATUS_AREA, "LoRa: " + response, COLOR_ORANGE);
+        }
+    } else {
+        Serial.println("LoRa command failed - no response");
+        display.showText(STATUS_AREA, "LoRa command failed", COLOR_RED);
+        remoteControlEnabled = false; // Disable until next successful heartbeat
+    }
+}
+
+void sendStatusUpdate()
+{
+    static unsigned long lastStatusUpdate = 0;
+    
+    // Send status every 2 minutes when active, 10 minutes when inactive
+    unsigned long interval = recentActivity ? 2 * 60 * 1000 : 10 * 60 * 1000;
+    
+    if (millis() - lastStatusUpdate < interval) {
+        return;
+    }
+    
+    String response = loraTransmitter.requestStatus();
+    if (response.length() > 0) {
+        Serial.printf("Remote status: %s\n", response.c_str());
+    }
+    
+    lastStatusUpdate = millis();
+}
+
+void handleRemoteControlToggle()
+{
+    // Long press to toggle remote control (hold for 3 seconds)
+    static unsigned long buttonPressStart = 0;
+    static bool longPressDetected = false;
+    
+    if (M5.BtnA.isPressed() && buttonPressStart == 0) {
+        buttonPressStart = millis();
+        longPressDetected = false;
+    }
+    
+    if (M5.BtnA.isPressed() && !longPressDetected && 
+        (millis() - buttonPressStart > 3000)) {
+        
+        // Long press detected - toggle remote control
+        remoteControlEnabled = !remoteControlEnabled;
+        longPressDetected = true;
+        
+        String message = remoteControlEnabled ? "LoRa enabled" : "LoRa disabled";
+        Serial.println(message);
+        display.showText(STATUS_AREA, message, remoteControlEnabled ? COLOR_GREEN : COLOR_RED);
+        
+        // Audio feedback
+        M5.Speaker.tone(remoteControlEnabled ? 1000 : 500, 200);
+        
+        // Update stove LoRa control setting
+        stove.setLoRaControlEnabled(remoteControlEnabled);
+    }
+    
+    if (M5.BtnA.wasReleased()) {
+        buttonPressStart = 0;
+        longPressDetected = false;
+    }
+}
+
+void setup()
+{
+    Serial.begin(9600);
+    
+    // Configure watchdog timer
+    esp_task_wdt_init(10, true);
+    esp_task_wdt_add(NULL);
+    
+    auto cfg = M5.config();
+    M5.begin(cfg);
+    
+    // Ensure WiFi is initially disabled
+    WiFi.mode(WIFI_OFF);
+    yield();
+
+    display.setup();
+    display.showSplashScreen();
+    yield();
+
+    Serial.print("Setting up encoder...");
+    display.showText(TIME, "Setting up (encoder) dial...");
+    delay(250);
+    yield();
+    encoder.setup();
+
+    Serial.println(" and RTC...");
+    display.showText(TIME, "Setting up real time clock...");
+    delay(250);
+    yield();
+    rtc.setup();
+
+    // Initialize temperature sensor
+    yield();
+    if (!tempSensor.setup())
+    {
+        Serial.println("Failed to initialize temperature sensor!");
+        display.showText(STATUS_AREA, "Temp Sensor Init Failed.", COLOR_RED);
+    }
+    else
+    {
+        Serial.printf("Temperature sensor initialized successfully at 0x%02X\n", tempSensor.getI2CAddress());
+        Serial.printf("Current resolution: %s\n\n", tempSensor.getResolutionString());
+    }
+
+    // Initialize stove control
+    yield();
+    Serial.println("Setting up stove control...");
+    display.showText(STATUS_AREA, "Setting up stove control...");
+    delay(250);
+    yield();
+    stove.setup();
+
+    // Initialize LoRa transmitter
+    yield();
+    setupLoRa();
+
+    // Clear setup message and show ready status
+    display.showText(STATUS_AREA, "System Ready", COLOR_MAGENTA);
+    delay(500);
+    
+    String now = rtc.getFormattedDate();
+    Serial.println("Setup done at " + now);
+    Serial.println();
+    display.showText(TIME, now);
+
+    // Clear status area for normal operation
+    display.showText(STATUS_AREA, "");
+
+    // Reset activity time
+    lastActivityTime = millis();
+    
+    yield();
+}
+
+void loop()
+{
+    static const int sleepShort = 1; // 1 second
+    static const int sleepLong = 3;  // sleep-in if no recent activity
+    static long loopCounter = 0;
+
+    yield(); // Feed watchdog at start of loop
+    M5.update();
+
+    unsigned long currentTime = millis();
+    bool isInactive = (currentTime - lastActivityTime > activityTimeout);
+    
+    // Determine temperature poll interval based on activity
+    unsigned long tempPollInterval = isInactive ? TEMP_POLL_INTERVAL : TEMP_POLL_ACTIVE_INTERVAL;
+    
+    // Check if it's time for temperature polling
+    bool timeForTempPoll = (currentTime - lastTempPoll >= tempPollInterval);
+    
+    // Wake up sensor before temperature reading if needed
+    if (timeForTempPoll && !tempSensor.getAwakeStatus()) {
+        tempSensor.wakeUp();
+        delay(10);
+        Serial.println("Temperature sensor woken for periodic poll");
+    }
+
+    // Read current values
+    static int hourOfWeek = updateTime();
+    static float curTemp = 999.0;
+    
+    if (timeForTempPoll) {
+        curTemp = updateTemperature();
+        lastTempPoll = currentTime;
+        Serial.printf("Periodic temperature poll: %.1f°F (interval: %lus)\n", 
+                     curTemp, tempPollInterval / 1000);
+    }
+
+    // Skip stove control if time is not yet available
+    if (hourOfWeek < 0) {
+        Serial.println("Waiting for RTC initialization...");
+        delay(100);
+        return;
+    }
+
+    // Handle button interrupts (including long press for LoRa toggle)
+    if (M5.BtnA.wasPressed()) {
+        recentActivity = true;
+        lastActivityTime = millis();
+        
+        Serial.println("Button pressed - toggling manual override");
+        
+        if (tempSensor.isValidReading(curTemp)) {
+            updateStove(curTemp, hourOfWeek, true); // Manual toggle requested
+        } else {
+            Serial.println("Button press ignored - invalid temperature reading");
+        }
+    }
+    
+    // Handle remote control toggle (long press)
+    handleRemoteControlToggle();
+
+    // Update stove status (handles both manual and automatic modes)
+    static bool stoveOn = false;
+    if (tempSensor.isValidReading(curTemp)) {
+        stoveOn = updateStove(curTemp, hourOfWeek);
+    }
+
+    // Handle LoRa operations
+    handleLoRaOperations();
+
+    // Display updates for pending states and detailed status
+    static unsigned long lastDisplayUpdate = 0;
+    static unsigned long loopCounterForDisplay = 0;
+    
+    if (millis() - lastDisplayUpdate > (isInactive ? 10000 : 2000)) {
+        String currentState = stove.getStateString();
+        if (currentState.startsWith("PENDING")) {
+            display.showText(STOVE, "Stove: " + currentState);
+        }
+        
+        // Show detailed status with cached temperature during inactive periods
+        if (!(loopCounterForDisplay++ % 25)) {
+            float displayTemp = isInactive ? tempSensor.getLastTemperatureF() : curTemp;
+            if (!isnan(displayTemp) && tempSensor.isValidReading(displayTemp)) {
+                float desiredTemp = stove.getCurrentDesiredTemperature();
+                float tempDiff = desiredTemp - displayTemp;
+                String statusMsg = String(desiredTemp, 1) + "F target, diff " + String(tempDiff, 1) + "F";
+                if (isInactive) {
+                    statusMsg += " (power save)";
+                }
+                if (remoteControlEnabled) {
+                    statusMsg += " [LoRa]";
+                }
+                display.showText(STATUS_AREA, statusMsg, isInactive ? COLOR_GRAY : COLOR_BLACK);
+            }
+        }
+        
+        // Update cached temperature display during inactive periods
+        if (isInactive && !isnan(tempSensor.getLastTemperatureF())) {
+            unsigned long timeSinceReading = (currentTime - tempSensor.getLastReadTime()) / 1000;
+            String tempStr = String(tempSensor.getLastTemperatureF(), 1) + " F";
+            if (timeSinceReading > 60) {
+                tempStr += " (" + String(timeSinceReading / 60) + "m ago)";
+            }
+            display.showText(TEMP, tempStr, COLOR_WHITE);
+        }
+        
+        lastDisplayUpdate = millis();
+    }
+
+    // Enhanced power saving with periodic temperature monitoring
+    static bool powerSaveMode = false;
+    static unsigned long powerSaveModeStartTime = 0;
+
+    if (isInactive)
+    {
+        if (!powerSaveMode)
+        {
+            setCpuFrequencyMhz(40);
+            powerSaveMode = true;
+            powerSaveModeStartTime = millis();
+            Serial.println(String(loopCounter) + ") Entering power save mode (CPU 40MHz, periodic temp polling)");
+        }
+        
+        // Put sensor to sleep after temperature reading
+        if (timeForTempPoll && tempSensor.getAwakeStatus()) {
+            tempSensor.getLastTemperatureF();
+            delay(100);
+            tempSensor.shutdown();
+            Serial.printf("Temperature sensor shutdown after poll at %s. Sleeping for 2 minutes...\n", 
+                         rtc.getFormattedTime().c_str());
+        }
+        
+        // Enter deep power save mode after being in power save mode for at least 30 seconds
+        if (!deepPowerSaveMode && (millis() - powerSaveModeStartTime > 30000)) {
+            deepPowerSaveMode = true;
+            Serial.println("Entering deep power save mode - temperature polling every 2 minutes");
+        }
+        
+        delay(1000);
+    }
+    else
+    {
+        if (powerSaveMode)
+        {
+            setCpuFrequencyMhz(80);
+            powerSaveMode = false;
+            deepPowerSaveMode = false;
+            powerSaveModeStartTime = 0;
+            Serial.println("Exiting power save mode (CPU 80MHz, active temp monitoring)");
+        }
+        
+        // Ensure sensor is awake during active periods
+        if (!tempSensor.getAwakeStatus()) {
+            tempSensor.wakeUp();
+            Serial.println("Temperature sensor woken for active period");
+        }
+    }
+
+    // Adaptive delay based on power mode
+    if (deepPowerSaveMode) {
+        delay(500);
+    } else if (powerSaveMode) {
+        delay(100);
+    } else {
+        delay(50);
+    }
+    
+    // Periodic watchdog feeding
+    esp_task_wdt_reset();
+    
+    loopCounter++;
+}

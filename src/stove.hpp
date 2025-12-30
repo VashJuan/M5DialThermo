@@ -16,6 +16,8 @@
 #include <Arduino.h>
 #include "temp_sensor.hpp"
 #include "rtc.hpp"
+#include "relay_control.hpp"
+#include "relay_control.hpp"
 
 /**
  * @enum StoveState
@@ -47,13 +49,14 @@ static const float STOVE_HYSTERESIS_HIGH = 0.5;
 class Stove
 {
 private:
-    int relayPin;                       // GPIO pin for relay control
+    RelayControl relayControl;          // Relay control instance
     StoveState currentState;            // Current stove state
     float baseTemperature;              // Base desired temperature (°F)
     unsigned long lastStateChange;      // Time of last stove state change
     unsigned long minChangeInterval;    // Minimum time between state changes (5 minutes)
     bool enabled;                       // Whether automatic control is enabled
     bool manualOverride;                // Whether manual override is active
+    bool loraControlEnabled;            // Whether LoRa remote control is enabled
     static const float SAFETY_MAX_TEMP; // Maximum safe temperature
 
     // Temperature schedule adjustments by hour (24-hour format)
@@ -208,6 +211,58 @@ public:
      * @brief Clear manual override and return to automatic mode
      */
     void clearManualOverride();
+
+    /**
+     * @brief Enable or disable LoRa remote control
+     * @param enable true to enable LoRa control, false to disable
+     */
+    void setLoRaControlEnabled(bool enable);
+
+    /**
+     * @brief Check if LoRa remote control is enabled
+     * @return true if LoRa control is enabled
+     */
+    bool isLoRaControlEnabled() const;
+
+    /**
+     * @brief Process LoRa remote control command
+     * @param command Command string from LoRa (e.g., "STOVE_ON", "STOVE_OFF")
+     * @param currentTemp Current temperature for safety checks
+     * @return Response string to send back via LoRa
+     */
+    String processLoRaCommand(const String &command, float currentTemp);
+
+    /**
+     * @brief Get relay control instance (for direct access if needed)
+     * @return Reference to RelayControl instance
+     */
+    RelayControl &getRelayControl();
+
+    /**
+     * @brief Enable or disable LoRa remote control
+     * @param enable true to enable LoRa control, false to disable
+     */
+    void setLoRaControlEnabled(bool enable);
+
+    /**
+     * @brief Check if LoRa remote control is enabled
+     * @return true if LoRa control is enabled
+     */
+    bool isLoRaControlEnabled() const;
+
+    /**
+     * @brief Process LoRa remote control command
+     * @param command Command string from LoRa (e.g., "STOVE_ON", "STOVE_OFF")
+     * @param currentTemp Current temperature for safety checks
+     * @return Response string to send back via LoRa
+     */
+    String processLoRaCommand(const String &command, float currentTemp);
+
+    /**
+     * @brief Get relay control instance (for direct access if needed)
+     * @return Reference to RelayControl instance
+     */
+    RelayControl &getRelayControl();
 };
 
 // Declare a global instance of the Stove class

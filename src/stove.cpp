@@ -18,6 +18,7 @@
 #include <FS.h>
 #include <SPIFFS.h>
 #include "stove.hpp"
+#include "../shared/protocol_common.hpp"
 
 // Global instance for easy access
 Stove stove;
@@ -29,12 +30,13 @@ extern RTC rtc;
 const float Stove::SAFETY_MAX_TEMP = 82.0;
 
 Stove::Stove(int pin, float baseTemp) : 
-    relayPin(pin), 
+    relayControl(pin, 180000, "Stove"),  // Initialize relay control with 3-minute interval
     currentState(STOVE_OFF), 
     lastStateChange(0),
     minChangeInterval(180000), // 3 minutes delay between state changes
     enabled(true),
-    manualOverride(false)
+    manualOverride(false),
+    loraControlEnabled(false)
 {
     // Initialize timeOffset array with default values as fallback
     timeOffset[0] = 0.0;   // Index 0 - unused
@@ -60,8 +62,7 @@ Stove::Stove(int pin, float baseTemp) :
 
 Stove::~Stove()
 {
-    // Turn off stove when object is destroyed
-    setRelayState(false);
+    // RelayControl destructor will handle relay cleanup
 }
 
 bool Stove::loadConfigFromCSV()
@@ -151,12 +152,12 @@ bool Stove::loadConfigFromCSV()
 
 void Stove::setup()
 {
-    pinMode(relayPin, OUTPUT);
-    setRelayState(false); // Start with stove off
+    relayControl.setup(); // Initialize relay control
+    currentState = STOVE_OFF;
     lastStateChange = millis();
     
-    Serial.printf("Stove control initialized on pin %d, base temperature: %.1f°F\n", 
-                  relayPin, baseTemperature);
+    Serial.printf("Stove control initialized with relay on pin %d, base temperature: %.1f°F\n", 
+                  2, baseTemperature); // TODO: Get actual pin from relayControl if needed
     Serial.println("Temperature schedule loaded from temps.csv (or defaults if file not found)");
 }
 
@@ -170,13 +171,17 @@ float Stove::getTemperatureAdjustment(int hour)
 
 bool Stove::canChangeState()
 {
-    return (millis() - lastStateChange) >= minChangeInterval;
+    return relayControl.canChangeState();
 }
 
 void Stove::setRelayState(bool on)
 {
-    digitalWrite(relayPin, on ? HIGH : LOW);
-    Serial.printf("Relay set to: %s\n", on ? "ON" : "OFF");
+    // Use relay control for state management
+    if (on) {
+        relayControl.forceState(true);
+    } else {
+        relayControl.forceState(false);
+    }
 }
 
 String Stove::update(float currentTemp, int hourOfWeek)
@@ -266,11 +271,15 @@ String Stove::turnOn()
         return "";
     }
     
-    currentState = STOVE_ON;
-    lastStateChange = millis();
-    setRelayState(true);
-    Serial.println("Stove: Turned ON");
-    return "Stove: Turned ON";
+    String result = relayControl.turnOn();
+    if (result.indexOf("ON") >= 0) {
+        currentState = STOVE_ON;
+        lastStateChange = millis();
+        Serial.println("Stove: Turned ON");
+        return "Stove: Turned ON";
+    }
+    
+    return result;
 }
 
 String Stove::turnOff()
@@ -281,11 +290,15 @@ String Stove::turnOff()
         return "";
     }
     
-    currentState = STOVE_OFF;
-    lastStateChange = millis();
-    setRelayState(false);
-    Serial.println("Stove: Turned OFF");
-    return "Stove: Turned OFF";
+    String result = relayControl.turnOff();
+    if (result.indexOf("OFF") >= 0) {
+        currentState = STOVE_OFF;
+        lastStateChange = millis();
+        Serial.println("Stove: Turned OFF");
+        return "Stove: Turned OFF";
+    }
+    
+    return result;
 }
 
 StoveState Stove::getState() const
@@ -334,11 +347,7 @@ bool Stove::isEnabled() const
 
 unsigned long Stove::getTimeUntilNextChange() const
 {
-    unsigned long elapsed = millis() - lastStateChange;
-    if (elapsed >= minChangeInterval) {
-        return 0;
-    }
-    return (minChangeInterval - elapsed) / 1000; // Return in seconds
+    return relayControl.getTimeUntilNextChange();
 }
 
 String Stove::getStateString() const
@@ -362,9 +371,9 @@ void Stove::forceState(bool on)
 {
     Serial.printf("Stove: FORCE state to %s\n", on ? "ON" : "OFF");
     
+    relayControl.forceState(on);
     currentState = on ? STOVE_ON : STOVE_OFF;
     lastStateChange = millis();
-    setRelayState(on);
 }
 
 String Stove::toggleManualOverride(float currentTemp)
@@ -417,5 +426,93 @@ void Stove::clearManualOverride()
         Serial.println("Manual override cleared - returning to automatic mode");
         // Don't immediately change state, let automatic control take over on next update
     }
+}
+
+void Stove::setLoRaControlEnabled(bool enable)
+{
+    loraControlEnabled = enable;
+    relayControl.setRemoteControlEnabled(enable);
+    Serial.printf("Stove: LoRa remote control %s\n", enable ? "ENABLED" : "DISABLED");
+}
+
+bool Stove::isLoRaControlEnabled() const
+{
+    return loraControlEnabled;
+}
+
+String Stove::processLoRaCommand(const String& command, float currentTemp)
+{
+    if (!loraControlEnabled) {
+        Serial.println("LoRa command ignored - LoRa control disabled");
+        return RESP_NACK;
+    }
+
+    String upperCommand = command;
+    upperCommand.toUpperCase();
+
+    // Log the command received
+    Serial.printf("Processing LoRa command: %s (temp: %.1f°F)\n", command.c_str(), currentTemp);
+
+    // Safety check for temperature
+    if (currentTemp > SAFETY_MAX_TEMP && upperCommand.indexOf("ON") >= 0) {
+        String safetyMsg = "Safety: Temperature " + String(currentTemp, 1) + "°F exceeds max " + String(SAFETY_MAX_TEMP, 1) + "°F";
+        Serial.println(safetyMsg);
+        return RESP_ERROR;
+    }
+
+    // Process the command
+    if (upperCommand == CMD_STOVE_ON || upperCommand == "STOVE_ON") {
+        // Clear automatic control temporarily and turn on
+        bool wasManualOverride = manualOverride;
+        manualOverride = true;
+        String result = turnOn();
+        
+        if (result.indexOf("ON") >= 0) {
+            Serial.println("LoRa command: Stove turned ON");
+            return RESP_STOVE_ON;
+        } else {
+            manualOverride = wasManualOverride; // Restore previous state
+            Serial.println("LoRa command: Failed to turn stove ON");
+            return RESP_NACK;
+        }
+    } 
+    else if (upperCommand == CMD_STOVE_OFF || upperCommand == "STOVE_OFF") {
+        // Turn off and potentially clear manual override
+        String result = turnOff();
+        if (manualOverride) {
+            manualOverride = false; // Clear manual override when turning off via LoRa
+        }
+        
+        if (result.indexOf("OFF") >= 0) {
+            Serial.println("LoRa command: Stove turned OFF");
+            return RESP_STOVE_OFF;
+        } else {
+            Serial.println("LoRa command: Failed to turn stove OFF");
+            return RESP_NACK;
+        }
+    }
+    else if (upperCommand == CMD_STATUS_REQUEST || upperCommand == "STATUS") {
+        String status = getStatus(currentTemp, 0); // Hour of week not critical for status
+        Serial.printf("LoRa status request: %s\n", status.c_str());
+        
+        if (status.indexOf("ON") >= 0) {
+            return RESP_STOVE_ON;
+        } else {
+            return RESP_STOVE_OFF;
+        }
+    }
+    else if (upperCommand == CMD_PING) {
+        Serial.println("LoRa ping received");
+        return RESP_PONG;
+    }
+    else {
+        Serial.printf("LoRa command: Unknown command '%s'\n", command.c_str());
+        return RESP_UNKNOWN;
+    }
+}
+
+RelayControl& Stove::getRelayControl()
+{
+    return relayControl;
 }
 
