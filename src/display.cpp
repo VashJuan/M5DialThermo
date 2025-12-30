@@ -164,8 +164,8 @@ void Display::drawMultiLineText(const String& text, int centerX, int startY, int
     
     // Calculate approximate character width for line breaking
     int charWidth = 6 * textSize;  // Rough estimate for default font
-    int radius = screenWidth / 2;  // Assume circular display
-    int centerY = screenHeight / 2;
+    int radius = getWidth() / 2;  // Assume circular display
+    int centerY = getHeight() / 2;
     
     String remainingText = text;
     int currentY = startY;
@@ -174,7 +174,7 @@ void Display::drawMultiLineText(const String& text, int centerX, int startY, int
     while (remainingText.length() > 0) {
         // Calculate available width at current Y position for round display
         int distanceFromCenter = abs(currentY - centerY);
-        int availableWidth = screenWidth;
+        int availableWidth = getWidth();
         
         // Apply circular constraint - reduce width as we move away from center
         if (distanceFromCenter < radius) {
@@ -220,7 +220,7 @@ void Display::drawMultiLineText(const String& text, int centerX, int startY, int
         currentY += lineHeight;
         
         // Prevent infinite loop and screen overflow
-        if (currentY > screenHeight - lineHeight) {
+        if (currentY > getHeight() - lineHeight) {
             break;
         }
     }
