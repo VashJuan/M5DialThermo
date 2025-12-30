@@ -115,8 +115,8 @@ void Display::showText(DisplayArea area, const String& text, TextColor color, bo
     M5.Display.setTextColor(getColorValue(color));
     M5.Display.setTextSize(getAreaTextSize(area));
 
-    // if  text (for the STATUS_AREA) is too long, allow it to wrap
-    if (area == STATUS_AREA) {
+    // if  text (for the STATUS_AREA or STOVE area) is too long, allow it to wrap
+    if (area == STATUS_AREA || area == STOVE) {
         M5.Display.setTextWrap(true);
         M5.Display.drawCenterString(text, centerX, getAreaY(area));
         M5.Display.setTextWrap(false);

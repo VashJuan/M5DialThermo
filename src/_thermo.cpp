@@ -373,6 +373,12 @@ void loop()
     static bool stoveOn = false;
     if (tempSensor.isValidReading(curTemp)) {
         stoveOn = updateStove(curTemp, hourOfWeek);
+        
+        // Update stove display immediately when temperature is polled
+        if (timeForTempPoll) {
+            String stoveStatus = "Stove: " + stove.getDisplayStatusText();
+            display.showText(STOVE, stoveStatus);
+        }
     }
 
     // For pending states, update display more frequently to show countdown
@@ -384,6 +390,10 @@ void loop()
         String currentState = stove.getStateString();
         if (currentState.startsWith("PENDING")) {
             display.showText(STOVE, "Stove: " + currentState);
+        } else if (!timeForTempPoll) {
+            // Update stove status even when not polling temp, but less frequently
+            String stoveStatus = "Stove: " + stove.getDisplayStatusText();
+            display.showText(STOVE, stoveStatus);
         }
         
         // Show detailed status with cached temperature during inactive periods

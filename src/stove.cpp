@@ -282,7 +282,11 @@ String Stove::update(float currentTemp, int hourOfWeek)
         float desiredTemp = getDesiredTemperature(rtc);   
         float tempDiff = desiredTemp - currentTemp;
         
-        statusDisplayText = "Local mode - Target: " + String(desiredTemp, 1) + "°F";
+        // Include temperature difference in status display for better feedback
+        statusDisplayText = "Local: " + String(desiredTemp, 1) + "°F target";
+        if (abs(tempDiff) > 0.1) {
+            statusDisplayText += ", " + String(tempDiff > 0 ? "+" : "") + String(tempDiff, 1) + "°F";
+        }
         
         if (!(loopCounter % 100)) {
             Serial.printf("Local mode: Current=%.1f°F, Target=%.1f°F, Diff=%.1f°F\n", 
