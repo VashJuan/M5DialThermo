@@ -9,6 +9,7 @@
 
 #include <Arduino.h>
 #include <HardwareSerial.h>
+#include "../../shared/protocol_common.hpp"
 
 /**
  * @class LoRaReceiver
@@ -24,15 +25,22 @@ private:
     int rxPin;
     int txPin;
     bool isInitialized;
+    LoRaCommunicationMode currentMode;
 
     // AT command handling
     bool sendATCommand(const String &command, const String &expectedResponse = "OK", int timeout = 5000);
     String readResponse(int timeout = 5000);
     void clearSerialBuffer();
 
-    // LoRaWAN configuration
+    // Mode-specific configuration
+    bool configureP2P();
     bool configureLoRaWAN();
     bool joinNetwork();
+
+    // P2P communication methods
+    bool sendP2PMessage(const String &message);
+    String receiveP2PMessage(int timeout = 2000);
+    bool enterP2PReceiveMode();
 
 public:
     /**
@@ -102,4 +110,24 @@ public:
      * @return true if successful
      */
     bool setAutoLowPowerMode(bool enable);
+
+    /**
+     * @brief Get current communication mode
+     * @return Current LoRaCommunicationMode
+     */
+    LoRaCommunicationMode getCurrentMode();
+
+    /**
+     * @brief Switch communication mode (P2P or LoRaWAN)
+     * @param mode New communication mode
+     * @return true if switch successful
+     */
+    bool switchMode(LoRaCommunicationMode mode);
+
+    /**
+     * @brief Check for command with automatic mode fallback
+     * Tries current mode first, falls back to other mode if needed
+     * @return Command string if received, empty string if none
+     */
+    String checkForCommandWithFallback();
 };

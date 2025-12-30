@@ -7,8 +7,13 @@
 
 #include "lora_receiver.hpp"
 #include "secrets.h"
+#include "../../shared/protocol_common.hpp"
 
-LoRaReceiver::LoRaReceiver() : loraSerial(nullptr), isInitialized(false) {
+LoRaReceiver::LoRaReceiver() : 
+    loraSerial(nullptr), 
+    isInitialized(false),
+    currentMode(LoRaCommunicationMode::P2P)
+{
     // Constructor
 }
 
@@ -45,7 +50,18 @@ bool LoRaReceiver::setup(int rxPin, int txPin) {
         return false;
     }
     
-    // Configure LoRaWAN settings
+    // Try P2P mode first (default)
+    currentMode = LoRaCommunicationMode::P2P;
+    if (configureP2P()) {
+        Serial.println("P2P mode configured successfully");
+        isInitialized = true;
+        return true;
+    }
+    
+    Serial.println("P2P configuration failed, falling back to LoRaWAN...");
+    
+    // Fall back to LoRaWAN mode
+    currentMode = LoRaCommunicationMode::LoRaWAN;
     if (!configureLoRaWAN()) {
         Serial.println("Failed to configure LoRaWAN settings");
         return false;
@@ -59,6 +75,38 @@ bool LoRaReceiver::setup(int rxPin, int txPin) {
     
     isInitialized = true;
     Serial.println("LoRa receiver setup complete");
+    return true;
+}
+
+bool LoRaReceiver::configureP2P()
+{
+    Serial.println("Configuring P2P mode...");
+    
+    // Enter TEST mode for P2P communication
+    if (!sendATCommand("AT+MODE=TEST", "OK")) {
+        Serial.println("Failed to enter TEST mode");
+        return false;
+    }
+    
+    // Configure RF parameters for P2P using constants from protocol_common.hpp
+    String rfConfigCommand = "AT+TEST=RFCFG," + 
+                           String(P2P_FREQUENCY) + "000000," +  // Convert MHz to Hz
+                           P2P_SPREADING_FACTOR + "," +
+                           P2P_BANDWIDTH + "," +
+                           P2P_CODING_RATE + "," +
+                           P2P_PREAMBLE_LENGTH + "," +
+                           P2P_TX_POWER;
+    
+    if (!sendATCommand(rfConfigCommand, "OK")) {
+        Serial.println("Failed to configure P2P RF parameters");
+        return false;
+    }
+    
+    Serial.println("P2P mode configured successfully");
+    Serial.printf("Frequency: %d MHz, SF: %s, BW: %s, CR: %s, Power: %s dBm\n",
+                  P2P_FREQUENCY, P2P_SPREADING_FACTOR, P2P_BANDWIDTH, 
+                  P2P_CODING_RATE, P2P_TX_POWER);
+    
     return true;
 }
 
@@ -157,38 +205,93 @@ bool LoRaReceiver::joinNetwork() {
     return false;
 }
 
+bool LoRaReceiver::sendP2PMessage(const String &message)
+{
+    // Convert message to hex format
+    String hexMessage = ProtocolHelper::asciiToHex(message);
+    
+    // Send P2P message using AT+TEST=TXLRPKT
+    String command = "AT+TEST=TXLRPKT,\"" + hexMessage + "\"";
+    
+    if (!sendATCommand(command, "TX DONE", 3000)) {
+        Serial.println("P2P transmission failed");
+        return false;
+    }
+    
+    Serial.printf("P2P message sent: %s (hex: %s)\n", message.c_str(), hexMessage.c_str());
+    return true;
+}
+
+String LoRaReceiver::receiveP2PMessage(int timeout)
+{
+    // Enter receive mode
+    if (!sendATCommand("AT+TEST=RXLRPKT", "RX DONE", timeout)) {
+        return "";
+    }
+    
+    // Wait for received message
+    unsigned long startTime = millis();
+    while (millis() - startTime < timeout) {
+        String response = readResponse(100);
+        
+        // Look for received data in format: +TEST: RX "hexdata"
+        int rxIndex = response.indexOf("+TEST: RX ");
+        if (rxIndex >= 0) {
+            int startQuote = response.indexOf('"', rxIndex);
+            int endQuote = response.indexOf('"', startQuote + 1);
+            
+            if (startQuote >= 0 && endQuote >= 0) {
+                String hexData = response.substring(startQuote + 1, endQuote);
+                String decodedMessage = ProtocolHelper::hexToAscii(hexData);
+                Serial.printf("P2P message received: %s (hex: %s)\n", 
+                            decodedMessage.c_str(), hexData.c_str());
+                return decodedMessage;
+            }
+        }
+        
+        delay(10);
+    }
+    
+    Serial.println("No P2P message received within timeout");
+    return "";
+}
+
+bool LoRaReceiver::enterP2PReceiveMode()
+{
+    return sendATCommand("AT+TEST=RXLRPKT", "RX DONE", 1000);
+}
+
 String LoRaReceiver::checkForCommand() {
     if (!isInitialized || !loraSerial) {
         return "";
     }
     
-    // Check for incoming data
-    if (loraSerial->available()) {
-        String response = readResponse(1000);
-        
-        // Look for received message indicator
-        int msgIndex = response.indexOf("+MSG:");
-        if (msgIndex >= 0) {
-            // Parse the message
-            // Format: +MSG: Port=X; RX: "hexdata"
-            int rxIndex = response.indexOf("RX:", msgIndex);
-            if (rxIndex >= 0) {
-                int startQuote = response.indexOf('"', rxIndex);
-                int endQuote = response.indexOf('"', startQuote + 1);
-                
-                if (startQuote >= 0 && endQuote >= 0) {
-                    String hexData = response.substring(startQuote + 1, endQuote);
+    // Use different methods based on current communication mode
+    if (currentMode == LoRaCommunicationMode::P2P) {
+        // P2P mode: Check for P2P messages
+        return receiveP2PMessage(100); // Quick check, don't block long
+    } else {
+        // LoRaWAN mode: Check for downlink messages
+        if (loraSerial->available()) {
+            String response = readResponse(1000);
+            
+            // Look for received message indicator
+            int msgIndex = response.indexOf("+MSG:");
+            if (msgIndex >= 0) {
+                // Parse the message
+                // Format: +MSG: Port=X; RX: "hexdata"
+                int rxIndex = response.indexOf("RX:", msgIndex);
+                if (rxIndex >= 0) {
+                    int startQuote = response.indexOf('"', rxIndex);
+                    int endQuote = response.indexOf('"', startQuote + 1);
                     
-                    // Convert hex to ASCII
-                    String command = "";
-                    for (int i = 0; i < hexData.length(); i += 2) {
-                        String hexByte = hexData.substring(i, i + 2);
-                        char ascii = (char)strtol(hexByte.c_str(), NULL, 16);
-                        command += ascii;
+                    if (startQuote >= 0 && endQuote >= 0) {
+                        String hexData = response.substring(startQuote + 1, endQuote);
+                        String command = ProtocolHelper::hexToAscii(hexData);
+                        
+                        Serial.printf("LoRaWAN command received: %s\\n", command.c_str());
+                        return command;
                     }
-                    
-                    Serial.printf("Decoded command: %s\n", command.c_str());
-                    return command;
                 }
             }
         }
@@ -202,17 +305,16 @@ bool LoRaReceiver::sendResponse(const String& response) {
         return false;
     }
     
-    // Convert ASCII to hex
-    String hexData = "";
-    for (int i = 0; i < response.length(); i++) {
-        char hex[3];
-        sprintf(hex, "%02X", (int)response[i]);
-        hexData += hex;
+    // Use different methods based on current communication mode
+    if (currentMode == LoRaCommunicationMode::P2P) {
+        // P2P mode: Send direct P2P message
+        return sendP2PMessage(response);
+    } else {
+        // LoRaWAN mode: Send downlink message
+        String hexData = ProtocolHelper::asciiToHex(response);
+        String command = "AT+MSG=" + hexData;
+        return sendATCommand(command, "OK", 10000);
     }
-    
-    // Send message
-    String command = "AT+MSG=" + hexData;
-    return sendATCommand(command, "OK", 10000);
 }
 
 String LoRaReceiver::getSignalQuality() {
@@ -365,4 +467,81 @@ bool LoRaReceiver::setAutoLowPowerMode(bool enable) {
     command += enable ? "ON" : "OFF";
     Serial.printf("Setting auto low power mode: %s\n", enable ? "ON" : "OFF");
     return sendATCommand(command, "OK", 3000);
+}
+
+LoRaCommunicationMode LoRaReceiver::getCurrentMode()
+{
+    return currentMode;
+}
+
+bool LoRaReceiver::switchMode(LoRaCommunicationMode mode)
+{
+    if (!isInitialized) {
+        Serial.println("Receiver not initialized");
+        return false;
+    }
+    
+    if (currentMode == mode) {
+        Serial.printf("Already in %s mode\n", mode == LoRaCommunicationMode::P2P ? "P2P" : "LoRaWAN");
+        return true;
+    }
+    
+    Serial.printf("Switching from %s to %s mode\n", 
+                  currentMode == LoRaCommunicationMode::P2P ? "P2P" : "LoRaWAN",
+                  mode == LoRaCommunicationMode::P2P ? "P2P" : "LoRaWAN");
+    
+    bool success = false;
+    if (mode == LoRaCommunicationMode::P2P) {
+        success = configureP2P();
+    } else {
+        success = configureLoRaWAN() && joinNetwork();
+    }
+    
+    if (success) {
+        currentMode = mode;
+        Serial.printf("Successfully switched to %s mode\n", 
+                      mode == LoRaCommunicationMode::P2P ? "P2P" : "LoRaWAN");
+    } else {
+        Serial.printf("Failed to switch to %s mode\n",
+                     mode == LoRaCommunicationMode::P2P ? "P2P" : "LoRaWAN");
+    }
+    
+    return success;
+}
+
+String LoRaReceiver::checkForCommandWithFallback()
+{
+    if (!isInitialized) {
+        Serial.println("Receiver not initialized");
+        return "";
+    }
+    
+    Serial.printf("Checking for command in %s mode\n", 
+                  currentMode == LoRaCommunicationMode::P2P ? "P2P" : "LoRaWAN");
+    
+    // Try current mode first
+    String command = checkForCommand();
+    if (command.length() > 0) {
+        return command;
+    }
+    
+    // If current mode didn't receive anything, try the other mode
+    LoRaCommunicationMode fallbackMode = (currentMode == LoRaCommunicationMode::P2P) ? 
+                                         LoRaCommunicationMode::LoRaWAN : 
+                                         LoRaCommunicationMode::P2P;
+    
+    Serial.printf("No command in primary mode, trying fallback mode: %s\n", 
+                  fallbackMode == LoRaCommunicationMode::P2P ? "P2P" : "LoRaWAN");
+    
+    if (switchMode(fallbackMode)) {
+        command = checkForCommand();
+        if (command.length() > 0) {
+            Serial.printf("Fallback successful with %s mode\n", 
+                         fallbackMode == LoRaCommunicationMode::P2P ? "P2P" : "LoRaWAN");
+            return command;
+        }
+    }
+    
+    // No command received in either mode
+    return "";
 }

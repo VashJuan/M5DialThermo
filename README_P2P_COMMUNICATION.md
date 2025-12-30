@@ -29,7 +29,7 @@ The P2P mode uses these default parameters (configurable in
 
 ```cpp
 // P2P Configuration
-const uint32_t P2P_FREQUENCY = 868300000;      // 868.3 MHz (EU) / Change to 915000000 for US
+const uint32_t P2P_FREQUENCY = 915000000;      // 915 MHz (US) / Change to 868300000 for EU
 const uint8_t P2P_SPREADING_FACTOR = 12;        // SF12 for maximum range
 const uint8_t P2P_BANDWIDTH = 125;              // 125 kHz
 const uint8_t P2P_CODING_RATE = 1;              // 4/5 coding rate
@@ -156,8 +156,8 @@ if (mode == LoRaCommunicationMode::P2P) {
 
 ### Frequency Configuration
 
-- **US (915 MHz)**: Change `P2P_FREQUENCY` to `915000000`
-- **EU (868 MHz)**: Default `868300000` is correct
+- **US (915 MHz)**: Default `P2P_FREQUENCY = 915000000` is correct
+- **EU (868 MHz)**: Change `P2P_FREQUENCY` to `868300000`
 - **Asia-Pacific**: May need different frequencies based on local regulations
 
 ### Power Limits

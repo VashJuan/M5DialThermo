@@ -36,7 +36,7 @@ enum LoRaCommunicationMode
 
 // P2P Configuration Constants
 // Based on Grove Wio E5 P2P example
-#define P2P_FREQUENCY 866           // Frequency in MHz (adjust based on region)
+#define P2P_FREQUENCY 915           // Frequency in MHz - US (915 MHz) default, change to 866 for EU
 #define P2P_SPREADING_FACTOR "SF12" // Spreading factor (SF7-SF12)
 #define P2P_BANDWIDTH "125"         // Bandwidth in kHz
 #define P2P_CODING_RATE "12"        // Coding rate 4/5, 4/6, 4/7, 4/8 -> 5,6,7,8
