@@ -15,6 +15,7 @@
 
 #include <Arduino.h>
 #include <M5Unified.h>
+#include <M5GFX.h>
 
 /**
  * @enum DisplayArea
@@ -47,6 +48,25 @@ enum TextColor
 };
 
 /**
+ * @struct AreaConfig
+ * @brief Configuration for a display area including font, colors, and text size
+ */
+struct AreaConfig
+{
+    const lgfx::IFont *font;   // Font pointer (nullptr for default font)
+    int textSize;              // Text size multiplier for non-GFX fonts
+    TextColor textColor;       // Text/foreground color
+    TextColor backgroundColor; // Background color
+
+    // Default constructor
+    AreaConfig() : font(nullptr), textSize(1), textColor(COLOR_BLACK), backgroundColor(COLOR_WHITE) {}
+
+    // Parameterized constructor
+    AreaConfig(const lgfx::IFont *f, int size, TextColor fg, TextColor bg)
+        : font(f), textSize(size), textColor(fg), backgroundColor(bg) {}
+};
+
+/**
  * @class Display
  * @brief Abstracted display class for screen management
  *
@@ -72,6 +92,14 @@ private:
     int stoveY;
     int statusY;
 
+    // Area configurations
+    AreaConfig areaConfigs[5]; // One for each DisplayArea enum value
+
+    /**
+     * @brief Initialize default area configurations
+     */
+    void initializeAreaConfigs();
+
     /**
      * @brief Get Y coordinate for specified display area
      * @param area Display area
@@ -85,6 +113,13 @@ private:
      * @return Text size multiplier
      */
     int getAreaTextSize(DisplayArea area);
+
+    /**
+     * @brief Get font pointer for specified display area
+     * @param area Display area
+     * @return Font pointer (nullptr for default font)
+     */
+    const lgfx::IFont *getAreaFont(DisplayArea area);
 
     /**
      * @brief Convert TextColor enum to actual color value
@@ -133,10 +168,43 @@ public:
      * @brief Display text in specified area
      * @param area Display area (TITLE, TIME, TEMP, STOVE, STATUS)
      * @param text Text to display
-     * @param color Text color (optional, defaults to black)
+     * @param color Text color (optional, uses area config if not specified)
      * @param clearFirst Whether to clear the area first (optional, defaults to true)
      */
     void showText(DisplayArea area, const String &text, TextColor color = COLOR_BLACK, bool clearFirst = true);
+
+    /**
+     * @brief Set configuration for a specific display area
+     * @param area Display area to configure
+     * @param font Font pointer (nullptr for default font)
+     * @param textSize Text size multiplier
+     * @param textColor Text/foreground color
+     * @param backgroundColor Background color
+     */
+    void setAreaConfig(DisplayArea area, const lgfx::IFont *font, int textSize, TextColor textColor, TextColor backgroundColor);
+
+    /**
+     * @brief Set font for a specific display area
+     * @param area Display area
+     * @param font Font pointer (nullptr for default font)
+     * @param textSize Text size multiplier (for non-GFX fonts)
+     */
+    void setAreaFont(DisplayArea area, const lgfx::IFont *font, int textSize = 1);
+
+    /**
+     * @brief Set colors for a specific display area
+     * @param area Display area
+     * @param textColor Text/foreground color
+     * @param backgroundColor Background color
+     */
+    void setAreaColors(DisplayArea area, TextColor textColor, TextColor backgroundColor);
+
+    /**
+     * @brief Get area configuration
+     * @param area Display area
+     * @return Copy of area configuration
+     */
+    AreaConfig getAreaConfiguration(DisplayArea area) const;
 
     /**
      * @brief Clear entire screen

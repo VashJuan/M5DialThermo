@@ -6,6 +6,7 @@
  */
 
 #include "display.hpp"
+#include "fontmanager.hpp"
 
 // Global instance for easy access
 Display display;
@@ -19,11 +20,22 @@ Display::Display() : centerX(120), centerY(120), width(240), height(240),
                      backgroundColor(BACKGROUND_COLOR),
                      titleY(40), timeY(60), tempY(90), stoveY(120), statusY(190)
 {
+    initializeAreaConfigs();
 }
 
 Display::~Display()
 {
     // Cleanup if needed
+}
+
+void Display::initializeAreaConfigs()
+{
+    // Initialize default configurations for each area
+    areaConfigs[TITLE] = AreaConfig(&fonts::FreeSans12pt7b, 1, COLOR_BLACK, COLOR_YELLOW);
+    areaConfigs[TIME] = AreaConfig(&fonts::FreeSans12pt7b, 1, COLOR_BLACK, COLOR_GREEN);
+    areaConfigs[TEMP] = AreaConfig(nullptr, 2, COLOR_RED, COLOR_YELLOW);
+    areaConfigs[STOVE] = AreaConfig(nullptr, 2, COLOR_BLUE, COLOR_YELLOW);
+    areaConfigs[STATUS_AREA] = AreaConfig(nullptr, 1, COLOR_BLACK, COLOR_YELLOW);
 }
 
 void Display::setup()
@@ -44,11 +56,26 @@ void Display::showSplashScreen()
     Serial.println("\n\n------------------------------");
     M5.Display.clear();
     M5.Display.fillScreen(backgroundColor);
-    M5.Display.setTextColor(TFT_BLACK);
-    M5.Display.setTextSize(1);
+    
+    // Use the title area configuration for splash screen
+    const AreaConfig& titleConfig = getAreaConfig(TITLE);
+    
+    if (titleConfig.font != nullptr) {
+        M5.Display.setFont(titleConfig.font);
+        M5.Display.setTextSize(1);
+    } else {
+        M5.Display.setFont(&fonts::Font2);
+        M5.Display.setTextSize(titleConfig.textSize);
+    }
+    M5.Display.setTextColor(getColorValue(titleConfig.textColor));
     
     M5.Display.drawCenterString("M5Dial Thermostat v 2.0.0", centerX, titleY);
     drawHorizontalLine(20, width - 20, titleY + 15, COLOR_BLUE);
+    
+    // Reset to default font
+    M5.Display.setFont(&fonts::Font2);
+    M5.Display.setTextSize(1);
+    M5.Display.setTextColor(TFT_BLACK);
     
     delay(50);
 }
@@ -65,16 +92,9 @@ int Display::getAreaY(DisplayArea area)
     }
 }
 
-int Display::getAreaTextSize(DisplayArea area)
+const AreaConfig& Display::getAreaConfig(DisplayArea area) const
 {
-    switch (area) {
-        case TITLE:  return 1;
-        case TIME:   return 1;
-        case TEMP:   return 2;  // Temperature should be larger
-        case STOVE:  return 2;
-        case STATUS_AREA: return 1;
-        default:     return 1;
-    }
+    return areaConfigs[area];
 }
 
 // Real options are at: https://docs.m5stack.com/en/arduino/m5gfx/m5gfx_appendix#color
@@ -97,11 +117,18 @@ uint32_t Display::getColorValue(TextColor color)
 void Display::clearArea(DisplayArea area)
 {
     int y = getAreaY(area);
-    int textSize = getAreaTextSize(area);
-    int clearHeight = 16 * textSize; // Approximate height based on text size
+    const AreaConfig& config = getAreaConfig(area);
+    int clearHeight;
     
-    // Use different clear color for time area for visual effect
-    uint32_t clearColor = (area == TIME) ? CLEAR_COLOR : backgroundColor;
+    // Different heights for different font types
+    if (config.font != nullptr) {
+        clearHeight = 20; // GFX fonts height
+    } else {
+        clearHeight = 16 * config.textSize; // Approximate height based on text size
+    }
+    
+    // Use area-specific background color
+    uint32_t clearColor = getColorValue(config.backgroundColor);
     
     M5.Display.fillRect(0, y - 2, width, clearHeight + 4, clearColor);
 }
@@ -112,17 +139,30 @@ void Display::showText(DisplayArea area, const String& text, TextColor color, bo
         clearArea(area);
     }
     
-    M5.Display.setTextColor(getColorValue(color));
-    M5.Display.setTextSize(getAreaTextSize(area));
+    const AreaConfig& config = getAreaConfig(area);
+    
+    // Use provided color or area default
+    TextColor actualTextColor = (color == COLOR_BLACK && config.textColor != COLOR_BLACK) ? config.textColor : color;
+    M5.Display.setTextColor(getColorValue(actualTextColor));
+    
+    // Set font for the area
+    if (config.font != nullptr) {
+        M5.Display.setFont(config.font);
+        M5.Display.setTextSize(1); // GFX fonts use size 1
+    } else {
+        M5.Display.setFont(&fonts::Font2); // Default font
+        M5.Display.setTextSize(config.textSize);
+    }
 
     // if  text (for the STATUS_AREA or STOVE area) is too long, break it into multiple lines
     if (area == STATUS_AREA || area == STOVE) {
-        drawMultiLineText(text, centerX, getAreaY(area), getAreaTextSize(area));
+        drawMultiLineText(text, centerX, getAreaY(area), config.font != nullptr ? 1 : config.textSize);
     } else {
         M5.Display.drawCenterString(text, centerX, getAreaY(area));
     }
     
-    // Reset to default color and size
+    // Reset to default font, color and size
+    M5.Display.setFont(&fonts::Font2);
     M5.Display.setTextColor(TFT_BLACK);
     M5.Display.setTextSize(1);
 }
@@ -224,4 +264,26 @@ void Display::drawMultiLineText(const String& text, int centerX, int startY, int
             break;
         }
     }
+}
+
+void Display::setAreaConfig(DisplayArea area, const lgfx::IFont* font, int textSize, TextColor textColor, TextColor backgroundColor)
+{
+    areaConfigs[area] = AreaConfig(font, textSize, textColor, backgroundColor);
+}
+
+void Display::setAreaFont(DisplayArea area, const lgfx::IFont* font, int textSize)
+{
+    areaConfigs[area].font = font;
+    areaConfigs[area].textSize = textSize;
+}
+
+void Display::setAreaColors(DisplayArea area, TextColor textColor, TextColor backgroundColor)
+{
+    areaConfigs[area].textColor = textColor;
+    areaConfigs[area].backgroundColor = backgroundColor;
+}
+
+AreaConfig Display::getAreaConfiguration(DisplayArea area) const
+{
+    return areaConfigs[area];
 }

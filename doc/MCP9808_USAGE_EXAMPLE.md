@@ -39,7 +39,7 @@ Connect the MCP9808 to M5Dial Port A:
 // TemperatureSensor tempSensor(0x18, MCP9808_Resolution::RES_0_0625C);
 
 void setup() {
-    Serial.begin(9600);
+    Serial.begin(115200);
 
     // Initialize the sensor
     if (!tempSensor.setup()) {

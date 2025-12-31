@@ -179,7 +179,7 @@ bool updateStove(float temperature, int hourOfWeek, bool manualToggleRequested =
 
 void setup()
 {
-    Serial.begin(9600);
+    Serial.begin(115200);
     
     // Configure watchdog timer for longer timeout (ESP32-S3 compatible)
     esp_task_wdt_init(30, true); // 30 second timeout, panic on timeout

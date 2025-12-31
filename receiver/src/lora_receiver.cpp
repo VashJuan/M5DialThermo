@@ -31,7 +31,7 @@ bool LoRaReceiver::setup(int rxPin, int txPin) {
     
     // Initialize UART for Grove-Wio-E5
     loraSerial = new HardwareSerial(1); // Use UART1
-    loraSerial->begin(9600, SERIAL_8N1, rxPin, txPin);
+    loraSerial->begin(19200, SERIAL_8N1, rxPin, txPin);
     
     delay(2000); // Allow module to boot
     

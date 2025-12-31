@@ -33,7 +33,7 @@ LoRaWANConfig config = {
 
 void setup()
 {
-    Serial.begin(9600);
+    Serial.begin(115200);
     delay(2000); // Allow serial monitor to connect
     
     Serial.println("LoRa Transmitter Example");
