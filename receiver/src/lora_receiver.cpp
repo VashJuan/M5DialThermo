@@ -31,7 +31,7 @@ bool LoRaReceiver::setup(int rxPin, int txPin) {
     
     // Initialize UART for Grove-Wio-E5
     loraSerial = new HardwareSerial(1); // Use UART1
-    loraSerial->begin(19200, SERIAL_8N1, rxPin, txPin);
+    loraSerial->begin(9600, SERIAL_8N1, rxPin, txPin);
     
     delay(2000); // Allow module to boot
     
@@ -111,7 +111,8 @@ bool LoRaReceiver::configureP2P()
 }
 
 bool LoRaReceiver::configureLoRaWAN() {
-    Serial.println("Configuring LoRaWAN settings...");\n    
+    Serial.println("Configuring LoRaWAN settings...");
+    
     // Set to LoRaWAN mode
     if (!sendATCommand("AT+MODE=LWOTAA", "OK")) {
         return false;
@@ -289,7 +290,7 @@ String LoRaReceiver::checkForCommand() {
                         String hexData = response.substring(startQuote + 1, endQuote);
                         String command = ProtocolHelper::hexToAscii(hexData);
                         
-                        Serial.printf("LoRaWAN command received: %s\\n", command.c_str());
+                        Serial.printf("LoRaWAN command received: %s\n", command.c_str());
                         return command;
                     }
                 }

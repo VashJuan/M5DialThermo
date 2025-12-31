@@ -285,7 +285,7 @@ String Stove::update(float currentTemp, int hourOfWeek)
         // Include temperature difference in status display for better feedback
         statusDisplayText = String(desiredTemp, 1) + "F goal;";
         if (abs(tempDiff) > 0.1) {
-            statusDisplayText += ", " + String(tempDiff > 0 ? "+" : "") + String(tempDiff, 1) + "F off";
+            statusDisplayText += String(tempDiff > 0 ? "+" : "") + String(tempDiff, 1) + "F off";
         }
         
         if (!(loopCounter % 100)) {

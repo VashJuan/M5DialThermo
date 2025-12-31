@@ -30,12 +30,13 @@ Display::~Display()
 
 void Display::initializeAreaConfigs()
 {
-    // Initialize default configurations for each area
-    areaConfigs[TITLE] = AreaConfig(&fonts::FreeSans12pt7b, 1, COLOR_BLACK, COLOR_YELLOW);
-    areaConfigs[TIME] = AreaConfig(&fonts::FreeSans12pt7b, 1, COLOR_BLACK, COLOR_GREEN);
-    areaConfigs[TEMP] = AreaConfig(nullptr, 2, COLOR_RED, COLOR_YELLOW);
-    areaConfigs[STOVE] = AreaConfig(nullptr, 2, COLOR_BLUE, COLOR_YELLOW);
-    areaConfigs[STATUS_AREA] = AreaConfig(nullptr, 1, COLOR_BLACK, COLOR_YELLOW);
+    // Nice fonts: Satisfy_24, DejaVu18, Font2 (tiny!), FreeSans9pt7b, FreeSansOblique12pt7b, FreeSerif12pt7b, Orbitron_Light_24, Roboto_Thin_24
+    // Default Area configurations: font, text size, text color, background color
+    areaConfigs[TITLE] = AreaConfig(&fonts::Font4, 1, COLOR_BLACK, COLOR_YELLOW);
+    areaConfigs[TIME] = AreaConfig(&fonts::Font2, 1, COLOR_BLACK, COLOR_YELLOW);
+    areaConfigs[TEMP] = AreaConfig(&fonts::FreeSerif12pt7b, 2, COLOR_RED, COLOR_YELLOW);
+    areaConfigs[STOVE] = AreaConfig(&fonts::DejaVu18, 2, COLOR_BLUE, COLOR_YELLOW);
+    areaConfigs[STATUS_AREA] = AreaConfig(&fonts::Font2, 1, COLOR_MAGENTA, COLOR_BLACK);
 }
 
 void Display::setup()
@@ -58,7 +59,7 @@ void Display::showSplashScreen()
     M5.Display.fillScreen(backgroundColor);
     
     // Use the title area configuration for splash screen
-    const AreaConfig& titleConfig = getAreaConfig(TITLE);
+    const AreaConfig titleConfig = getAreaConfiguration(TITLE);
     
     if (titleConfig.font != nullptr) {
         M5.Display.setFont(titleConfig.font);
@@ -92,12 +93,13 @@ int Display::getAreaY(DisplayArea area)
     }
 }
 
-const AreaConfig& Display::getAreaConfig(DisplayArea area) const
+AreaConfig Display::getAreaConfiguration(DisplayArea area) const
 {
     return areaConfigs[area];
 }
 
-// Real options are at: https://docs.m5stack.com/en/arduino/m5gfx/m5gfx_appendix#color
+// Using standard TFT color constants from M5GFX/LovyanGFX
+// See: https://docs.m5stack.com/en/arduino/m5gfx/m5gfx_appendix#color
 uint32_t Display::getColorValue(TextColor color)
 {
     switch (color) {
@@ -117,7 +119,7 @@ uint32_t Display::getColorValue(TextColor color)
 void Display::clearArea(DisplayArea area)
 {
     int y = getAreaY(area);
-    const AreaConfig& config = getAreaConfig(area);
+    const AreaConfig config = getAreaConfiguration(area);
     int clearHeight;
     
     // Different heights for different font types
@@ -139,7 +141,7 @@ void Display::showText(DisplayArea area, const String& text, TextColor color, bo
         clearArea(area);
     }
     
-    const AreaConfig& config = getAreaConfig(area);
+    const AreaConfig config = getAreaConfiguration(area);
     
     // Use provided color or area default
     TextColor actualTextColor = (color == COLOR_BLACK && config.textColor != COLOR_BLACK) ? config.textColor : color;
@@ -281,9 +283,4 @@ void Display::setAreaColors(DisplayArea area, TextColor textColor, TextColor bac
 {
     areaConfigs[area].textColor = textColor;
     areaConfigs[area].backgroundColor = backgroundColor;
-}
-
-AreaConfig Display::getAreaConfiguration(DisplayArea area) const
-{
-    return areaConfigs[area];
 }

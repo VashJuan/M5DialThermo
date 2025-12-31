@@ -78,10 +78,9 @@ This project consists of two main components:
 - 😴 **Adaptive Sleep Modes:** Context-aware power management for battery
   optimization
 - 🌍 **True Geographic Detection:** Automatic timezone via IP geolocation API
-- ✅ Automatic timezone conversion to ESP32 format
+- ⏰ Automatic timezone conversion to ESP32 format
 - ✅ Multi-layer fallback system for reliability
-- ✅ No manual configuration needed in most cases
-- ✅ Works globally regardless of device location
+- 🌎 Works globally regardless of device location
 
 ### Power Management Features
 

@@ -38,10 +38,10 @@
 #include "status_led.hpp"
 
 // Pin definitions for XIAO ESP32S3
-const int STOVE_CONTROL_PIN = D10;    // Output to gas stove control
-const int STATUS_LED_PIN = D9;        // Status LED (optional)
-const int LORA_RX_PIN = D6;          // Grove-Wio-E5 TX -> ESP32 RX
-const int LORA_TX_PIN = D7;          // Grove-Wio-E5 RX -> ESP32 TX
+const int STOVE_CONTROL_PIN = 10;    // Output to gas stove control (GPIO10)
+const int STATUS_LED_PIN = 9;        // Status LED (optional) (GPIO9)
+const int LORA_RX_PIN = 6;          // Grove-Wio-E5 TX -> ESP32 RX (GPIO6)
+const int LORA_TX_PIN = 7;          // Grove-Wio-E5 RX -> ESP32 TX (GPIO7)
 
 // Safety timeout - turn off stove if no signal received (in milliseconds)
 const unsigned long SAFETY_TIMEOUT = 10 * 60 * 1000; // 10 minutes
@@ -101,7 +101,15 @@ void setup() {
     Serial.println("LoRa receiver initialized successfully");
     
     // Enable power-saving features for battery operation
-    if (loraReceiver.setAutoLowPowerMode(true)) {\n        Serial.println(\"Auto low power mode enabled - module will sleep automatically\");\n    } else {\n        Serial.println(\"Warning: Could not enable auto low power mode\");\n    }\n    \n    // Get initial signal quality\n    String signalQuality = loraReceiver.getSignalQuality();\n    Serial.printf(\"Initial signal quality: %s\\n\", signalQuality.c_str());
+    if (loraReceiver.setAutoLowPowerMode(true)) {
+        Serial.println("Auto low power mode enabled - module will sleep automatically");
+    } else {
+        Serial.println("Warning: Could not enable auto low power mode");
+    }
+    
+    // Get initial signal quality
+    String signalQuality = loraReceiver.getSignalQuality();
+    Serial.printf("Initial signal quality: %s\n", signalQuality.c_str());
     
     // System ready
     systemInitialized = true;
