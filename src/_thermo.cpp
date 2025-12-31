@@ -179,14 +179,16 @@ bool updateStove(float temperature, int hourOfWeek, bool manualToggleRequested =
 
 void setup()
 {
-    Serial.begin(115200);
-    
     // Configure watchdog timer for longer timeout (ESP32-S3 compatible)
     esp_task_wdt_init(30, true); // 30 second timeout, panic on timeout
     esp_task_wdt_add(NULL); // Add current task to watchdog
     
     auto cfg = M5.config();
     M5.begin(cfg);
+    
+    // Serial must be initialized AFTER M5.begin() for ESP32-S3 USB-CDC
+    Serial.begin(115200);
+    delay(100); // Give serial time to initialize
     
     // Ensure WiFi is initially disabled to prevent background operations
     WiFi.mode(WIFI_OFF);

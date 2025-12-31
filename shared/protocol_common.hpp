@@ -236,12 +236,21 @@ struct LoRaWANConfig
     String p2pSyncWord = P2P_SYNC_WORD;
 
     // LoRaWAN configuration (used when mode = LoRaCommunicationMode::LoRaWAN)
-    String appEUI = "0000000000000000";                 // Application EUI (8 bytes hex)
-    String appKey = "00000000000000000000000000000000"; // Application Key (16 bytes hex)
-    String region = LORAWAN_DEFAULT_REGION;             // Frequency region
-    uint8_t dataRate = LORAWAN_DEFAULT_DR;              // Data rate
-    bool adaptiveDataRate = true;                       // Enable ADR
-    uint8_t transmitPower = 14;                         // TX power (dBm)
+    // Credentials should be defined in secrets.h (LORAWAN_APP_EUI and LORAWAN_APP_KEY)
+#ifdef LORAWAN_APP_EUI
+    String appEUI = LORAWAN_APP_EUI; // Application EUI from secrets.h
+#else
+    String appEUI = "0000000000000000"; // Fallback placeholder (8 bytes hex)
+#endif
+#ifdef LORAWAN_APP_KEY
+    String appKey = LORAWAN_APP_KEY; // Application Key from secrets.h
+#else
+    String appKey = "00000000000000000000000000000000"; // Fallback placeholder (16 bytes hex)
+#endif
+    String region = LORAWAN_DEFAULT_REGION; // Frequency region
+    uint8_t dataRate = LORAWAN_DEFAULT_DR;  // Data rate
+    bool adaptiveDataRate = true;           // Enable ADR
+    uint8_t transmitPower = 14;             // TX power (dBm)
 
     // Device-specific settings
     bool otaa = true;           // Over-The-Air Activation

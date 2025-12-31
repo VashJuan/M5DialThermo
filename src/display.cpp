@@ -14,13 +14,13 @@ Display display;
 // Display layout constants
 // See https://docs.m5stack.com/en/arduino/m5gfx/m5gfx_appendix for options
 static const uint32_t BACKGROUND_COLOR = 0xFFB040;
-static const uint32_t CLEAR_COLOR = 0xBED500;
+static const uint32_t CLEAR_COLOR = COLOR_MAGENTA; // was 0xBED500
 
 Display::Display() : centerX(120), centerY(120), width(240), height(240), 
                      backgroundColor(BACKGROUND_COLOR),
                      titleY(40), timeY(60), tempY(90), stoveY(120), statusY(190)
 {
-    initializeAreaConfigs();
+    // Font initialization moved to setup() to avoid crashes before M5.begin()
 }
 
 Display::~Display()
@@ -32,7 +32,7 @@ void Display::initializeAreaConfigs()
 {
     // Nice fonts: Satisfy_24, DejaVu18, Font2 (tiny!), FreeSans9pt7b, FreeSansOblique12pt7b, FreeSerif12pt7b, Orbitron_Light_24, Roboto_Thin_24
     // Default Area configurations: font, text size, text color, background color
-    areaConfigs[TITLE] = AreaConfig(&fonts::Font4, 1, COLOR_BLACK, COLOR_YELLOW);
+    areaConfigs[TITLE] = AreaConfig(&fonts::Font2, 1, COLOR_BLACK, COLOR_YELLOW);
     areaConfigs[TIME] = AreaConfig(&fonts::Font2, 1, COLOR_BLACK, COLOR_YELLOW);
     areaConfigs[TEMP] = AreaConfig(&fonts::FreeSerif12pt7b, 2, COLOR_RED, COLOR_YELLOW);
     areaConfigs[STOVE] = AreaConfig(&fonts::DejaVu18, 2, COLOR_BLUE, COLOR_YELLOW);
@@ -41,6 +41,9 @@ void Display::initializeAreaConfigs()
 
 void Display::setup()
 {
+    // Initialize area configs after M5 is initialized
+    initializeAreaConfigs();
+    
     // Get actual display dimensions
     width = M5.Display.width() == 0 ? 240 : M5.Display.width();
     height = M5.Display.height() == 0 ? 240 : M5.Display.height();
