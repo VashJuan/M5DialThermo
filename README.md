@@ -1,4 +1,4 @@
-# 🌡️ M5Dial Thermo
+# 🌡️ M5Dial Smart Thermostat
 
 A smart thermostat system for the M5Stack Dial using precision temperature
 sensing and LoRaWAN communication. 🏠🔥
@@ -24,410 +24,91 @@ This project consists of two main components:
 - **Communication Protocol** - LoRaWAN message definitions
 - **Common Utilities** - Shared code between devices
 
-## 📝 User Notes
-
-- 📄 The base temperature and hourly temperature adjustments are configured in
-  the easily edited file: **temps.csv**
-- 🌡️ The temperature schedule varies from -15°F (nighttime) to 0°F (daytime
-  comfort periods)
-- ✏️ Edit temps.csv to customize your thermostat schedule without modifying code
-- 🌍 **Timezone Configuration**: When WiFi/NTP is unavailable, the system uses a
-  fallback timezone stored in temps.csv (see README_TIMEZONE.md for details)
-- ⚠️ If temps.csv is not found, the system uses fallback defaults (68°F base
-  temperature) from temps.csv
-
-## 🔧 Hardware
-
-- 🎛️ **[M5Dial](https://m5stack.com/products/m5dial)** - Main controller with
-  built-in dial encoder and display
-  - Uses M5StampS3 (ESP32-S3) as the controller
-- 🌡️
-  **[Adafruit MCP9808 Precision I2C Temperature Sensor](http://www.adafruit.com/products/1782)** -
-  High-precision temperature measurement with power management
-  - ±0.25°C accuracy, up to 0.0625°C resolution
-  - Sleep/wake functionality for power savings
-  - I2C interface (no analog pins required)
-- 📡
-  **[Grove-Wio-E5 Wireless Module](https://www.seeedstudio.com/Grove-LoRa-E5-STM32WLE5JC-p-4867.html)** -
-  LoRaWAN communication
-  - supporting both (G)FSK, BPSK, (G)MSK, and LoRa® modulations
-  - supports LoRaWAN® Class A/B/C protocol and a wide frequency plan, including
-    EU868/US915/AU915/AS923/KR920/IN865
-  - connect to different LoRaWAN server platforms like TheThingsStack,
-    Chirpstack, and others
-  - this Wio-E5 LoRaWAN STM32WLE5JC module, integrates the ARM Cortex M4
-    ultra-low-power MCU core and Wio SX126x
-  - LoRa details:
-    <https://www.seeedstudio.com/blog/2020/08/03/lorapedia-an-introduction-of-lora-and-lorawan-technology/>
-
-## ✨ Features
-
-- 🔍 **Smart Temperature Monitoring:** Periodic temperature polling with
-  intelligent power management
-- 🔋 **Power Saving Modes:** Multiple power levels with automatic CPU frequency
-  scaling
-- 💾 **Cached Temperature Display:** Shows recent readings with timestamps
-  during power save periods
-- 🎛️ **Interactive Dial Control:** Manual threshold adjustment via built-in
-  encoder
-- 📡 **LoRaWAN Connectivity:** Remote monitoring capabilities (Grove-Wio-E5)
-- ⏰ **Real-time Clock Functionality:** NTP synchronization with timezone
-  support
-- 👆 **Touch Interface Support:** Responsive button handling for manual
-  overrides
-- 😴 **Adaptive Sleep Modes:** Context-aware power management for battery
-  optimization
-- 🌍 **True Geographic Detection:** Automatic timezone via IP geolocation API
-- ⏰ Automatic timezone conversion to ESP32 format
-- ✅ Multi-layer fallback system for reliability
-- 🌎 Works globally regardless of device location
-
-### Power Management Features
-
-- **Periodic Temperature Polling:**
-  - Active mode: Temperature checked every 5 seconds
-  - Power save mode: Temperature checked every 2 minutes
-  - Smart sensor wake/sleep cycles to minimize power consumption
-- **Adaptive Power Modes:**
-  - **Active Mode:** Full performance (80MHz CPU) during user interaction
-  - **Power Save Mode:** Reduced performance (40MHz CPU) after 3 seconds idle
-  - **Deep Power Save:** Extended sleep with cached temperature display
-- **Temperature Sensor Management:**
-  - MCP9808 sensor automatically sleeps between readings
-  - Cached temperature values displayed during inactive periods
-  - Intelligent wake-up scheduling for periodic monitoring
-
-### 🎯 M5Dial thermostat should
-
-- 🚀 Show a splash screen with "M5Dial Thermostat v 2.0.0"
-- 🔧 Initialize the temperature sensor (MCP9808) with power management
-- 📶 Connect to WiFi and sync time via NTP
-- 📱 Display temperature readings and stove status with adaptive refresh rates
-- 👆 Respond to button presses for manual stove override
-- ⚡ Use interrupt-driven input for responsive UI
-- 🔋 **Automatically manage power consumption:**
-  - 😴 Enter power save mode after 3 seconds of inactivity
-  - 📉 Reduce CPU frequency and display updates during idle periods
-  - 📊 Poll temperature every 2 minutes during power save mode
-  - 💾 Show cached temperature readings with timestamps
-  - ⏰ Wake sensor only when needed for new readings
-
-### 📝 Note
-
-The warning about flash size (16MB vs 8MB available) is just a configuration
-mismatch but doesn't prevent operation since the actual firmware (889KB) fits
-comfortably in the available 8MB flash.
-
-## 💻 Development Environment Setup
-
-This project uses a VS Code workspace configuration with PlatformIO for optimal
-development experience. The workspace includes multi-folder support for managing
-the main thermostat, receiver, and shared components.
-
-### 🚀 Quick Setup for New Developers
-
-1. **📁 Clone/Download the project structure:**
-
-   ```
-   YourProjectFolder/
-   ├── M5 Stack Dial/
-   │   ├── thermo/               # Main thermostat (this folder)
-   │   │   ├── __HouseThermo.code-workspace  # VS Code workspace config
-   │   │   ├── platformio.ini    # PlatformIO project config
-   │   │   └── src/              # Source code
-   │   └── libraries/            # Additional libraries if needed
-   └── __HouseThermo/           # Parent project folder (if applicable)
-   ```
-
-2. **🔧 Install Required Tools:**
-
-   - **Visual Studio Code** - https://code.visualstudio.com/
-   - **PlatformIO Extension** - Install from VS Code Extensions marketplace
-   - **C/C++ Extension** - For IntelliSense and debugging support
-
-3. **📂 Open the Workspace:**
-
-   ```bash
-   # Navigate to the thermo directory
-   cd "path/to/your/thermo"
-
-   # Open the workspace file (recommended)
-   code __HouseThermo.code-workspace
-
-   # OR open the folder directly
-   code .
-   ```
-
-### 🛠️ VS Code Workspace Configuration
-
-The project includes a `__HouseThermo.code-workspace` file that configures:
-
-- **Multi-folder workspace** with main project, libraries, and examples
-- **PlatformIO integration** with optimized settings:
-  - Disables automatic PlatformIO Home startup
-  - Activates only on PlatformIO projects
-  - Prevents auto-opening of platformio.ini
-- **Spell checking** with custom technical terms (lgfx, Orbitron)
-
-### ⚙️ Recommended VS Code Extensions
-
-For the best development experience, install these extensions:
-
-1. **PlatformIO IDE** (platformio.platformio-ide) - ✅ Required
-2. **C/C++** (ms-vscode.cpptools) - IntelliSense and debugging
-3. **C/C++ Extension Pack** (ms-vscode.cpptools-extension-pack) - Complete C++
-   support
-4. **Code Spell Checker** (streetsidesoftware.code-spell-checker) - Document
-   quality
-5. **GitLens** (eamodio.gitlens) - Git integration and history
-6. **Bracket Pair Colorizer** (CoenraadS.bracket-pair-colorizer-2) - Code
-   readability
-
-### 🎯 Development Workflow
-
-1. **📂 Open Workspace:** Use `__HouseThermo.code-workspace` for multi-folder
-   support
-2. **🔧 Configure Secrets:** Copy `secrets_template.h` to `secrets.h` and add
-   your WiFi credentials
-3. **🔨 Build:** Use PlatformIO build tasks (Ctrl+Shift+P → "PlatformIO: Build")
-4. **📤 Upload:** PlatformIO upload tasks or use `pio run --target upload`
-5. **📊 Monitor:** Built-in serial monitor via PlatformIO
-
-### 🌐 Setting Up on Different Machines
-
-To recreate this development environment elsewhere:
-
-1. **📋 Copy these essential files:**
-
-   ```
-   __HouseThermo.code-workspace    # VS Code workspace config
-   platformio.ini                  # PlatformIO project config
-   .gitignore                     # Git ignore patterns
-   src/                           # Source code directory
-   shared/                        # Shared protocol definitions
-   ```
-
-2. **📝 Workspace file structure explanation:**
-
-   ```jsonc
-   {
-     "folders": [
-       { "path": "../../__HouseThermo" },     # Parent project (if exists)
-       { "path": ".." },                      # Current project root
-       { "path": "../../libraries/M5Dial/examples/Basic" }  # Examples/references
-     ],
-     "settings": {
-       "platformio-ide.autoOpenPlatformIOIniFile": false,
-       "platformio-ide.activateOnlyOnPlatformIOProject": true,
-       // ... other optimized settings
-     }
-   }
-   ```
-
-3. **🔧 Adapt paths for your structure:**
-
-   - Modify the `"path"` entries in the workspace file to match your directory
-     structure
-   - The `".."` path should point to your main project directory
-   - Additional paths are optional and can be removed if not applicable
-
-4. **🚀 Platform-specific setup:**
-
-   **Windows:**
-
-   ```powershell
-   # Clone and setup
-   git clone <your-repo-url>
-   cd "path\to\thermo"
-   code __HouseThermo.code-workspace
-   ```
-
-   **macOS/Linux:**
-
-   ```bash
-   # Clone and setup
-   git clone <your-repo-url>
-   cd "path/to/thermo"
-   code __HouseThermo.code-workspace
-   ```
-
-### 🔍 Troubleshooting Development Environment
-
-- **❌ PlatformIO not working:** Ensure PlatformIO extension is installed and
-  enabled
-- **❌ IntelliSense errors:** Reload window (Ctrl+Shift+P → "Developer: Reload
-  Window")
-- **❌ Missing dependencies:** Run `pio lib install` to install missing
-  libraries
-- **❌ COM port issues:** Check device manager and ensure M5Dial is connected
-- **❌ Workspace folders missing:** Adjust paths in
-  `__HouseThermo.code-workspace`
-
-### 💡 Development Tips
-
-- **🔄 Use PlatformIO tasks:** Access via Command Palette (Ctrl+Shift+P)
-- **🏗️ Build shortcuts:** Ctrl+Alt+B for build, Ctrl+Alt+U for upload
-- **📱 Serial monitoring:** Built into PlatformIO, auto-detects baud rate
-- **🎯 Multi-target support:** The platformio.ini supports multiple board
-  configurations
-- **⚡ Fast iteration:** Use `pio run -t upload && pio device monitor` for quick
-  test cycles
+## 🌟 Features
 
-### 💻 Development Environment
+### 🌡️ Temperature Control
 
-- **Platform**: Arduino M5Stack Board Manager v2.0.7
-- **IDE**: PlatformIO within Visual Studio Code, or Arduino IDE
+- **Precision Monitoring**: MCP9808 sensor with ±0.25°C accuracy
+- **Smart Caching**: Temperature readings cached for optimal battery life
+- **Configurable Schedules**: Easy temperature customization via temps.csv file
+- **Manual Override**: Dial control for instant temperature adjustments
 
-## 📁 Project Structure
+### ⏱️ Time & Scheduling
 
-- 📋 `_thermo.cpp` - Main Arduino sketch with power management
-- 🎛️ `encoder.cpp/.hpp` - Dial encoder handling
-- 🌡️ `temp_sensor.cpp/.hpp` - Temperature sensor interface with caching
-- 🔥 `stove.cpp/.hpp` - Stove control logic
-- ⏰ `rtc.cpp/.hpp` - Real-time clock functionality
-- 📱 `display.cpp/.hpp` - Display management with power-aware updates
-- 📚 `doc/POWER_MANAGEMENT.md` - Detailed power saving documentation
-- 📖 `doc/MCP9808_USAGE_EXAMPLE.md` - Temperature sensor usage guide
-
-## 🛠️ Installation
-
-1. 📦 Install the Arduino M5Stack Board Manager v2.0.7
-2. 📚 Install required libraries (see dependency list in thermo.ino)
-3. 🔌 Connect the hardware components according to the Grove connector layout
-4. 🔒 **Configure WiFi credentials** (see Security Configuration Setup below)
-5. Hold down button 0 on the back of the dial while connecting the USB cable to
-   power the M5Dial on in "download code" mode.
-6. 📁 **Upload filesystem data**: `pio run --target uploadfs` (required for
-   temps.csv and timezone fallback)
-7. 🚀 **Upload firmware**: `pio run --target upload`
-8. Cycle the power (USB connector) off and back on to enter "Run Mode".
-9. Optionally connect a serial monitor in your IDE if you wish to view debug
-   messages.
-
-### 🐠 PlatformIO Commands
-
-- 📁 `pio run --target uploadfs` - Upload filesystem data (temps.csv, etc.) to
-  device
-- 🚀 `pio run --target upload` - Upload firmware to device
-- 🛠️ `pio run` - Build project without uploading
-
-**📝 Note**: The filesystem upload (`uploadfs`) must be done at least once
-before first use, and again whenever you modify `temps.csv` or other data files.
-
-## 📝 Notes
-
-- ⚠️ Initial implementation assumes I2C interface for temperature sensor and
-  Wio-E5 module
-- 🔧 These modules do not actually support I2C - interface may need revision
-- 🌡️ Temperature sensor uses analog interface
-- 📡 Wio-E5 uses UART/AT commands for LoRaWAN communication
-
-## 🔒 Security Configuration Setup
-
-### 📶 WiFi Credentials Setup
-
-To protect sensitive information like WiFi credentials, this project uses a
-separate secrets file that is not committed to version control.
-
-### 🚀 Initial Setup
-
-1. **📋 Copy the template file:**
-
-   ```bash
-   cp secrets_template.h secrets.h
-   ```
-
-2. **✏️ Edit `secrets.h` with your actual credentials:**
-
-   ```cpp
-   #define DEFAULT_WIFI_SSID "YourActualWiFiName"
-   #define DEFAULT_WIFI_PASSWORD "YourActualWiFiPassword"
-   ```
-
-3. **✅ Verify `secrets.h` is in `.gitignore`:** The file `secrets.h` should
-   already be listed in `.gitignore` to prevent accidental commits.
-
-### ⚠️ Important Notes
-
-- ⚠️ **Never commit `secrets.h` to version control**
-- ✅ Always use `secrets_template.h` as a reference for the required structure
-- 🔒 Keep your actual credentials in `secrets.h` only
-- 📝 Update `secrets_template.h` if you add new secret configuration options
-
-### File Structure
-
-- `secrets_template.h` - Template file (committed to Git)
-- `secrets.h` - Your actual credentials (ignored by Git)
-- `.gitignore` - Contains entry for `secrets.h`
-
-### Adding New Secrets
-
-If you need to add new sensitive configuration (API keys, MQTT credentials,
-etc.):
-
-1. Add the `#define` to both `secrets_template.h` and `secrets.h`
-2. Use placeholder values in `secrets_template.h`
-3. Use real values in `secrets.h`
-
-### Troubleshooting
-
-If you get compilation errors about missing `secrets.h`:
-
-1. Make sure you copied `secrets_template.h` to `secrets.h`
-2. Verify the file exists in the same directory as `rtc.cpp`
-3. Check that your WiFi credentials are properly defined in `secrets.h`
-
-### Current Library Dependencies
-
-- M5Unified @ 0.1.17
-- M5GFX @ 0.1.17
-- Adafruit MCP9808 Library @ 2.0.2
-- ArduinoJson @ 7.4.2
-- HTTPClient @ 2.0.0
-- SPIFFS @ 2.0.0
-- FS @ 2.0.0
-- WiFi @ 2.0.0
-- Wire @ 2.0.0
-
-## Additional Documentation
-
-- **[Power Management Guide](doc/POWER_MANAGEMENT.md)** - Detailed information
-  about power saving features, battery optimization, and energy consumption
-- **[MCP9808 Sensor Usage](doc/MCP9808_USAGE_EXAMPLE.md)** - Complete guide for
-  the precision temperature sensor including caching features
-- **[Timezone Configuration](README_TIMEZONE.md)** - Geographic timezone
-  detection and fallback systems
-- **[NTP Troubleshooting](README_NTP_TROUBLESHOOTING.md)** - Network time
-  synchronization debugging
-- **[Build Instructions](README_BUILD.md)** - Compilation and upload procedures
+- **Real-Time Clock**: Integrated RTC with NTP synchronization
+- **Automatic Timezone**: Smart geographic timezone detection with fallbacks
+- **Temperature Logging**: Historical data storage for energy usage insights
+- **Customizable Schedule**: 24-hour temperature profile configuration
+
+### 🏠 Heating System Integration
+
+- **Smart Stove Control**: Automated gas heating system on/off control
+- **Safety Features**: Automatic shutoff mechanisms and temperature monitoring
+- **Energy Efficiency**: Intelligent heating cycles to minimize energy usage
+- **Remote Control**: LoRaWAN communication for wireless relay operation
+
+### 🔋 Power Management
+
+- **Battery Optimization**: Advanced power saving with multiple sleep modes
+- **Auto Display Dimming**: Screen brightness adjusts to conserve power
+- **Adaptive Power Modes**: CPU frequency scaling based on activity
+- **Smart Sensor Wake**: Temperature sensor sleeps between readings
+
+### 📱 User Interface
+
+- **Rotary Encoder**: Smooth dial control for temperature adjustments
+- **High-Resolution Display**: Clear LCD showing temperature, time, and status
+- **Touch Controls**: Responsive button handling for manual overrides
+- **Status Indicators**: Visual feedback for heating, connectivity, and power
+
+## 🛠️ Hardware Requirements
+
+### Required Components
+
+- **M5Stack Dial** (ESP32-S3 based controller with built-in display and encoder)
+- **MCP9808 Temperature Sensor** (high precision I2C sensor)
+- **XIAO ESP32S3** (for receiver/relay unit)
+- **2x Grove-Wio-E5 Modules** (LoRaWAN communication)
+- **Relay Module** (for heating system control)
+
+### Optional Components
+
+- **External Battery Pack** (for extended operation)
+- **Mounting Hardware** (for permanent installation)
+
+## 🚀 Getting Started
+
+### Basic Setup
+
+1. **Assemble Hardware**: Connect components according to documentation
+2. **Install Firmware**: Upload firmware to both thermostat and receiver
+3. **Configure WiFi**: Set up network credentials for NTP time sync
+4. **Customize Schedule**: Edit temps.csv for your temperature preferences
+
+### Initial Installation
+
+1. **Upload Data Files**: Use filesystem upload for temps.csv and configuration
+2. **Configure Secrets**: Copy secrets template and add your WiFi credentials
+3. **Test System**: Verify temperature reading and heating control operation
+4. **Mount Devices**: Install in desired locations with good signal coverage
 
 ## 🌡️ Temperature Configuration
 
-### 🎛️ Customizing Temperature Schedule
+### 📋 Easy Schedule Customization
 
-The thermostat temperature settings are configured through the `temps.csv` file,
-making it easy for users to customize without modifying code.
+Temperature settings are configured through the `temps.csv` file - no
+programming required!
 
-### 📋 Temperature Configuration File Structure
+### 📝 Editing Your Temperature Schedule
 
-The `temps.csv` file contains:
+1. **Open `temps.csv`** in any text editor or Excel
+2. **Set Base Temperature**: Modify the baseline temperature (e.g., 68°F)
+3. **Adjust Hourly Offsets**: Customize temperature changes throughout the day
+   - ❄️ Negative values = cooler (sleep periods)
+   - 🔥 Positive values = warmer (comfort periods)
+   - 📝 Example: Base 68°F + (-15°F at 1AM) = 53°F nighttime temperature
 
-1. **🌡️ Base Temperature**: The baseline target temperature in Fahrenheit
-2. **⏰ Hourly Offsets**: Temperature adjustments for each hour of the day (1 AM
-   to Midnight)
-
-### ✏️ Editing Temperature Schedule
-
-1. **📝 Open `temps.csv` in any text editor or spreadsheet program**
-2. **🎯 Modify the base temperature**: Change the value after `BaseTemperature,`
-3. **⏰ Adjust hourly offsets**: Modify the temperature offset values for each
-   hour
-   - ❄️ Negative values reduce temperature below base
-   - 🔥 Positive values increase temperature above base
-   - 📝 Example: If base is 68°F and hour 1 has -15.0 offset, target temperature
-     at 1 AM will be 53°F
-
-### Example Temperature Schedule
+### Example Schedule
 
 ```csv
 BaseTemperature,70.0
@@ -435,14 +116,93 @@ BaseTemperature,70.0
 # Hour,Temperature Offset,Description
 1,-12.0,1 AM - Sleep mode (58°F)
 8,0.0,8 AM - Normal comfort (70°F)
-22,-8.0,10 PM - Evening wind-down (62°F)
+17,2.0,5 PM - Evening comfort (72°F)
+22,-8.0,10 PM - Wind-down (62°F)
 ```
 
-### 📍 File Location
+### 🌍 Automatic Timezone Support
 
-- 💾 Place `temps.csv` on the SD card or in the device's file system
-- ⚙️ The system will automatically load settings on startup
-- 📎 If file is not found, defaults to 68°F base with standard schedule
+- **Geographic Detection**: System automatically detects your timezone
+- **Fallback Options**: Multiple backup methods ensure reliable operation
+- **Global Support**: Works worldwide regardless of device location
+
+## 🔋 Battery Life & Power Management
+
+### Power Saving Features
+
+- **Adaptive Modes**: Automatic CPU frequency scaling (80MHz → 40MHz)
+- **Smart Sleep**: Temperature sensor sleeps between readings
+- **Display Management**: Screen dims and turns off during idle periods
+- **Periodic Monitoring**: Switches between 5-second and 2-minute polling
+
+### Battery Life Expectations
+
+- **Active Use**: 24-48 hours with regular interaction
+- **Power Save Mode**: Up to 72 hours with minimal interaction
+- **USB Power**: Continuous operation when connected to power
+
+## 📡 LoRaWAN Communication
+
+### Wireless Features
+
+- **Long Range**: LoRaWAN communication for remote installations
+- **Low Power**: Efficient communication protocol
+- **Reliable**: Multiple transmission attempts with acknowledgments
+- **Secure**: Encrypted communication between devices
+
+### Communication Protocol
+
+- **Bidirectional**: Two-way communication between thermostat and receiver
+- **Status Updates**: Real-time heating system status
+- **Command Transmission**: Remote heating on/off control
+- **Error Handling**: Automatic retry and error recovery
+
+## 🔒 Privacy & Security
+
+### Local Operation
+
+- **No Cloud Required**: Operates entirely on your local network
+- **Private Data**: Temperature data stays on your devices
+- **Secure Credentials**: WiFi passwords stored in protected files
+
+### Data Storage
+
+- **Local Storage**: All data stored locally on device
+- **No External Services**: No data sent to external servers
+- **User Control**: Complete control over your data and privacy
+
+## 💡 Usage Tips
+
+### Optimal Performance
+
+- **Signal Strength**: Ensure good LoRaWAN signal between devices
+- **Sensor Placement**: Mount away from heat sources for accuracy
+- **Regular Updates**: Keep firmware updated for latest features
+
+### Maintenance
+
+- **Schedule Review**: Periodically review and adjust temperature schedule
+- **Battery Monitoring**: Check battery levels and charging status
+- **System Health**: Monitor for communication errors or sensor issues
+
+## 📚 Learn More
+
+### Documentation
+
+For technical details, development setup, and advanced configuration, see:
+
+- **[Developer Documentation](DEVELOPER.md)** - Complete development setup guide
+- **[Power Management Guide](doc/POWER_MANAGEMENT.md)** - Battery optimization
+  details
+- **[Build Instructions](README_BUILD.md)** - Compilation and upload procedures
+- **[Timezone Configuration](README_TIMEZONE.md)** - Geographic timezone details
+- **[NTP Troubleshooting](README_NTP_TROUBLESHOOTING.md)** - Network time issues
+
+### Support
+
+- **GitHub Issues**: Report bugs and request features
+- **Open Source**: Full source code available for customization
+- **Community**: Comprehensive guides for setup and troubleshooting
 
 ## 📄 License
 
@@ -452,4 +212,8 @@ for details.
 ## 👨‍💻 Author
 
 John Cornelison (<john@vashonSoftware.com>)  
-Version 2.0.0 - December 2025 🎉
+Version 2.0.0 - December 2024 🎉
+
+---
+
+_Built with ❤️ for efficient home heating control_
