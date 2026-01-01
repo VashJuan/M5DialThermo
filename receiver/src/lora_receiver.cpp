@@ -37,13 +37,19 @@ bool LoRaReceiver::setup(int rxPin, int txPin) {
     // Initialize UART for Grove-Wio-E5
     loraSerial = new HardwareSerial(1); // Use UART1
     
+    Serial.println("Waiting for Grove-Wio-E5 to power up and stabilize...");
+    delay(3000); // Give module time to fully boot after power-on
+    
     // Try multiple baud rates - Grove-Wio-E5 can be 9600 or 115200
     const int baudRates[] = {9600, 115200};
     bool communicationEstablished = false;
     
     for (int baud : baudRates) {
         Serial.printf("\nTrying baud rate: %d\n", baud);
-        loraSerial->end(); // End previous attempt
+        if (baud != 9600) {
+            loraSerial->end(); // End previous attempt (skip for first attempt)
+            delay(500);
+        }
         loraSerial->begin(baud, SERIAL_8N1, rxPin, txPin);
         
         delay(2000); // Wait for module to stabilize
