@@ -101,16 +101,18 @@ void setup() {
     
     Serial.println("LoRa receiver initialized successfully");
     
-    // Enable power-saving features for battery operation
+    // Try to enable power-saving features for battery operation (optional)
+    // Note: Some modules may not support this feature
+    Serial.println("Attempting to enable auto low power mode (optional feature)...");
     if (loraReceiver.setAutoLowPowerMode(true)) {
         Serial.println("Auto low power mode enabled - module will sleep automatically");
     } else {
-        Serial.println("Warning: Could not enable auto low power mode");
+        Serial.println("Info: Auto low power mode not supported by this module (this is normal)");
     }
     
-    // Get initial signal quality
-    String signalQuality = loraReceiver.getSignalQuality();
-    Serial.printf("Initial signal quality: %s\n", signalQuality.c_str());
+    // Skip initial signal quality check to avoid watchdog timeout
+    // Signal quality will be checked periodically during operation
+    Serial.println("Signal quality monitoring will start after initialization");
     
     // System ready
     systemInitialized = true;

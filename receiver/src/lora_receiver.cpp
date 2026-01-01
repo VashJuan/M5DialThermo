@@ -378,34 +378,31 @@ String LoRaReceiver::getSignalQuality() {
         return "Not initialized";
     }
     
+    // Note: Some Grove-Wio-E5 modules don't respond to these commands in P2P mode
+    // Use shorter timeouts to prevent watchdog issues
     String qualityInfo = "";
     
-    // Get RSSI
+    // Try to get RSSI (may not be supported in P2P mode)
     clearSerialBuffer();
-    if (sendATCommand("AT+RSSI", "", 3000)) {
-        String rssiResponse = readResponse(2000);
-        qualityInfo += "RSSI: " + rssiResponse;
+    if (sendATCommand("AT+RSSI", "", 1000)) {
+        String rssiResponse = readResponse(500);
+        if (rssiResponse.length() > 0) {
+            qualityInfo += "RSSI: " + rssiResponse;
+        }
     }
     
-    // Get SNR if available
+    // Try to get SNR if available (may not be supported in P2P mode)
     clearSerialBuffer();
-    if (sendATCommand("AT+SNR", "", 3000)) {
-        String snrResponse = readResponse(2000);
-        if (snrResponse.length() > 0) {
+    if (sendATCommand("AT+SNR", "", 1000)) {
+        String snrResponse = readResponse(500);
+        if (snrResponse.length() > 0 && qualityInfo.length() > 0) {
             qualityInfo += ", SNR: " + snrResponse;
+        } else if (snrResponse.length() > 0) {
+            qualityInfo += "SNR: " + snrResponse;
         }
     }
     
-    // Get data rate info
-    clearSerialBuffer();
-    if (sendATCommand("AT+DR", "", 3000)) {
-        String drResponse = readResponse(2000);
-        if (drResponse.length() > 0) {
-            qualityInfo += ", DR: " + drResponse;
-        }
-    }
-    
-    return qualityInfo.length() > 0 ? qualityInfo : "Error reading signal quality";
+    return qualityInfo.length() > 0 ? qualityInfo : "Signal monitoring not available in current mode";
 }
 
 bool LoRaReceiver::isReady() {
