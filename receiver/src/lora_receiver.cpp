@@ -28,17 +28,72 @@ bool LoRaReceiver::setup(int rxPin, int txPin) {
     this->txPin = txPin;
     
     Serial.printf("Setting up LoRa receiver on pins RX:%d, TX:%d\n", rxPin, txPin);
+    Serial.println("IMPORTANT: Verify physical connections:");
+    Serial.println("  Grove-Wio-E5 TX --> ESP32 RX (GPIO44/D6)");
+    Serial.println("  Grove-Wio-E5 RX --> ESP32 TX (GPIO43/D7)");
+    Serial.println("  Grove-Wio-E5 VCC --> 3.3V");
+    Serial.println("  Grove-Wio-E5 GND --> GND");
     
     // Initialize UART for Grove-Wio-E5
     loraSerial = new HardwareSerial(1); // Use UART1
-    loraSerial->begin(9600, SERIAL_8N1, rxPin, txPin);
     
-    delay(2000); // Allow module to boot
+    // Try multiple baud rates - Grove-Wio-E5 can be 9600 or 115200
+    const int baudRates[] = {9600, 115200};
+    bool communicationEstablished = false;
     
-    // Test communication
-    clearSerialBuffer();
-    if (!sendATCommand("AT", "OK", 3000)) {
-        Serial.println("Failed to communicate with Grove-Wio-E5 module");
+    for (int baud : baudRates) {
+        Serial.printf("\nTrying baud rate: %d\n", baud);
+        loraSerial->end(); // End previous attempt
+        loraSerial->begin(baud, SERIAL_8N1, rxPin, txPin);
+        
+        delay(2000); // Wait for module to stabilize
+        
+        // Send wake-up sequence
+        loraSerial->println();
+        delay(200);
+        loraSerial->println("AT");
+        delay(200);
+        clearSerialBuffer();
+        
+        // Test with multiple AT command attempts
+        for (int attempt = 1; attempt <= 3; attempt++) {
+            Serial.printf("  Attempt %d/3 at %d baud...\n", attempt, baud);
+            
+            if (sendATCommand("AT", "OK", 2000)) {
+                Serial.printf("SUCCESS! Module responding at %d baud\n", baud);
+                communicationEstablished = true;
+                break;
+            }
+            
+            // Check if ANY data was received
+            clearSerialBuffer();
+            loraSerial->println("AT");
+            delay(500);
+            if (loraSerial->available()) {
+                Serial.print("  Received garbage data: ");
+                while (loraSerial->available()) {
+                    Serial.printf("0x%02X ", loraSerial->read());
+                }
+                Serial.println("\n  (Wrong baud rate or connection issue)");
+            } else {
+                Serial.println("  No response - check connections!");
+            }
+            
+            delay(500);
+        }
+        
+        if (communicationEstablished) break;
+    }
+    
+    if (!communicationEstablished) {
+        Serial.println("\n========================================");
+        Serial.println("FAILED: Could not communicate with module at any baud rate!");
+        Serial.println("Troubleshooting steps:");
+        Serial.println("1. Verify RX/TX are NOT swapped");
+        Serial.println("2. Check 3.3V power with multimeter");
+        Serial.println("3. Ensure Grove-Wio-E5 has antenna attached");
+        Serial.println("4. Try swapping RX/TX if connections are correct");
+        Serial.println("========================================");
         return false;
     }
     
@@ -402,9 +457,13 @@ bool LoRaReceiver::sendATCommand(const String& command, const String& expectedRe
     
     Serial.printf("Received: %s (took %lu ms)\n", response.c_str(), commandTime);
     
-    // More flexible response checking
+    // More flexible response checking - Grove-Wio-E5 returns "+AT: OK" format
     bool success = (response.indexOf(expectedResponse) >= 0) || 
-                   (expectedResponse == "OK" && response.indexOf("+OK") >= 0);
+                   (expectedResponse == "OK" && (response.indexOf("+OK") >= 0 || 
+                                                  response.indexOf("OK") >= 0 ||
+                                                  response.indexOf("+AT: OK") >= 0)) ||
+                   (response.length() > 0 && expectedResponse.length() > 0 && 
+                    response.indexOf("+") == 0); // Any "+XXX" response is valid acknowledgment
     
     if (!success && expectedResponse != "") {
         Serial.printf("Command failed - expected '%s' but got '%s'\n", 

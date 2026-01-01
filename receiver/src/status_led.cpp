@@ -23,8 +23,21 @@ bool StatusLED::setup(int pin) {
     
     Serial.printf("Setting up status LED on pin %d\n", pin);
     
-    // Configure pin as output
+    // Configure pin as output with explicit mode
     pinMode(ledPin, OUTPUT);
+    
+    // Test the pin by setting it HIGH briefly
+    digitalWrite(ledPin, HIGH);
+    delay(500); // 500ms test flash
+    Serial.println("Status LED test flash (HIGH) - LED should be ON now");
+    
+    digitalWrite(ledPin, LOW);
+    delay(500); // 500ms off
+    Serial.println("Status LED test complete (LOW) - LED should be OFF now");
+    
+    // One more test to verify
+    digitalWrite(ledPin, HIGH);
+    delay(200);
     digitalWrite(ledPin, LOW);
     
     isInitialized = true;

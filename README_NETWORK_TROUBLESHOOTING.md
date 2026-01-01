@@ -61,6 +61,12 @@ Warning: SNTP not starting - may indicate network issues
 1. **Check NTP Ports:**
 
    - Ensure UDP port 123 is open for outbound connections
+   - ping pool.ntp.org (doesn't use UDP though)
+   - ping time.nist.gov
+   - Test-NetConnection time.nist.gov -Port 123
+   - New-NetFirewallRule -DisplayName "NTP Client" -Direction Outbound -Protocol
+     UDP -RemotePort 123 -Action Allow
+     - w32tm /stripchart /computer:us.pool.ntp.org /samples:5
    - Some corporate networks block NTP traffic
 
 2. **Alternative NTP Servers:** The code now includes fallback servers:
@@ -300,3 +306,32 @@ If issues persist after trying these solutions:
 
 The system is designed to be resilient - it will continue operating even if
 network synchronization fails, using the fallback timezone configuration.
+
+Search Assist
+
+To troubleshoot outgoing port 123 traffic on Windows 10 with a Comcast router,
+check the Windows Firewall settings to ensure that UDP port 123 is allowed.
+Additionally, verify the router's firewall settings to ensure that it is not
+blocking NTP traffic. snbforums.com Microsoft Troubleshooting Outgoing Port 123
+Traffic on Windows 10 Check Windows Firewall Settings Open Windows Firewall: Go
+to Control Panel. Click on "System and Security" and then "Windows Defender
+Firewall". Review Inbound and Outbound Rules: Click on "Advanced settings".
+Check both inbound and outbound rules for any blocks on UDP port 123. Create a
+New Rule: If blocked, create a new outbound rule to allow UDP traffic on
+port 123. Select "New Rule", choose "Port", and specify UDP and port 123. Verify
+Router Settings Access Router Configuration: Open a web browser and enter your
+router's IP address (commonly 192.168.1.1 or 192.168.0.1). Log in with your
+credentials. Check Firewall Settings: Look for any firewall settings that may
+block outgoing traffic. Ensure that UDP port 123 is not listed under blocked
+ports. NAT and Port Forwarding: Check if Network Address Translation (NAT)
+settings are affecting port 123. If necessary, set up port forwarding for UDP
+port 123 to your device's IP address. Test NTP Functionality Use Command Prompt:
+Open Command Prompt as an administrator. Run the command: w32tm /stripchart
+/computer:us.pool.ntp.org /samples:5. This tests if your system can reach the
+NTP server. Check for Errors: If you receive errors, it indicates that something
+is blocking the traffic. Additional Considerations Third-Party Security
+Software: Check if any antivirus or security software is blocking the traffic.
+ISP Restrictions: Contact Comcast to ensure they are not blocking NTP traffic on
+their end. By following these steps, you should be able to identify and resolve
+issues blocking outgoing port 123 traffic on your Windows 10 system with a
+Comcast router.

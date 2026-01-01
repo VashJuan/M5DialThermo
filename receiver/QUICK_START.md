@@ -19,8 +19,8 @@ XIAO ESP32S3    Grove-Wio-E5
 ============    ============
 3.3V     ←→     VCC
 GND      ←→     GND
-D6 (RX)  ←→     TX
-D7 (TX)  ←→     RX
+D6 (GPIO44/RX)  ←→     TX
+D7 (GPIO43/TX)  ←→     RX
 
 XIAO ESP32S3    Gas Stove Interface
 ============    ==================
@@ -66,6 +66,8 @@ if (!sendATCommand("AT+APPKEY=YOUR_APP_KEY_HERE", "OK")) {
 
 ```bash
 pio run --target upload
+or
+pio run --target upload --upload-port COM6
 ```
 
 ## Testing
@@ -73,6 +75,7 @@ pio run --target upload
 ### 1. Serial Monitor
 
 ```bash
+cd receiver
 pio device monitor
 ```
 
@@ -153,10 +156,28 @@ Test pin with simple digitalWrite() in loop
 **3. Grove-Wio-E5 Not Responding**
 
 ```
-Check UART connections (RX/TX not swapped)
-Verify 3.3V power to Grove module
-Try AT command manually: Serial1.println("AT");
+ERROR: Failed to communicate with Grove-Wio-E5 module
 ```
+
+**Solutions:**
+
+1. **Verify Pin Connections** - D6/D7 must use GPIO43/GPIO44
+   - Physical pin D7 = GPIO43 (TX)
+   - Physical pin D6 = GPIO44 (RX)
+2. **Check RX/TX Not Swapped** - Grove TX → ESP32 RX, Grove RX → ESP32 TX
+3. **Verify Power** - Grove-Wio-E5 needs stable 3.3V (check with multimeter)
+4. **Increase Boot Delay** - Module needs 5+ seconds to initialize
+5. **Test Manually**:
+   ```cpp
+   Serial1.begin(9600, SERIAL_8N1, 44, 43);
+   delay(5000);
+   Serial1.println("AT");
+   delay(500);
+   while(Serial1.available()) {
+       Serial.print((char)Serial1.read());
+   }
+   ```
+6. **Check Baud Rate** - Grove-Wio-E5 defaults to 9600, try 115200 if 9600 fails
 
 **4. System Keeps Resetting**
 

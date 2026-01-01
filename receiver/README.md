@@ -26,10 +26,13 @@ thermostat system.
 
 - **D10**: Gas stove control output (HIGH = ON, LOW = OFF)
 - **D9**: Status LED (optional, for visual feedback)
-- **D6**: UART RX (connects to Grove-Wio-E5 TX)
-- **D7**: UART TX (connects to Grove-Wio-E5 RX)
+- **D6 (GPIO44)**: UART RX (connects to Grove-Wio-E5 TX)
+- **D7 (GPIO43)**: UART TX (connects to Grove-Wio-E5 RX)
 - **3V3**: Power for Grove-Wio-E5
 - **GND**: Ground connection
+
+**Note**: The XIAO ESP32S3 physical pins D6/D7 map to GPIO43 (TX) and GPIO44
+(RX) for proper hardware UART support.
 
 ### Grove-Wio-E5 Connections:
 
