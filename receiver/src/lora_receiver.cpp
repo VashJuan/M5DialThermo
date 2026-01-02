@@ -8,6 +8,7 @@
 #include "lora_receiver.hpp"
 #include "secrets.h"
 #include "../../shared/protocol_common.hpp"
+#include <esp_task_wdt.h>
 
 LoRaReceiver::LoRaReceiver() : 
     loraSerial(nullptr), 
@@ -37,16 +38,70 @@ bool LoRaReceiver::setup(int rxPin, int txPin) {
     // Initialize UART for Grove-Wio-E5
     loraSerial = new HardwareSerial(1); // Use UART1
     
-    Serial.println("Waiting for Grove-Wio-E5 to power up and stabilize...");
+    Serial.println("Waiting for Grove-Wio-E5 and M5Dial to power up and stabilize...");
+    Serial.printf("Initialization timeout: %d seconds\n", LORA_INIT_TIMEOUT_MS / 1000);
     delay(3000); // Give module time to fully boot after power-on
     
-    // Try multiple baud rates - Grove-Wio-E5 can be 9600 or 115200
-    const int baudRates[] = {9600, 115200};
     bool communicationEstablished = false;
+    unsigned long initStartTime = millis();
+    
+#if LORA_DISABLE_BAUD_SEARCH
+    // Use fixed baud rate - no search
+    Serial.printf("Using fixed baud rate: %d (baud search disabled)\n", LORA_FIXED_BAUD_RATE);
+    loraSerial->begin(LORA_FIXED_BAUD_RATE, SERIAL_8N1, rxPin, txPin);
+    delay(2000); // Wait for module to stabilize
+    
+    // Try to connect with extended timeout for M5Dial to come online
+    int attempt = 0;
+    while (!communicationEstablished && (millis() - initStartTime < LORA_INIT_TIMEOUT_MS)) {
+        attempt++;
+        Serial.printf("Connection attempt %d (elapsed: %lu ms)...\n", 
+                     attempt, millis() - initStartTime);
+        esp_task_wdt_reset(); // Reset watchdog during attempts
+        
+        // Send wake-up sequence
+        loraSerial->println();
+        delay(200);
+        loraSerial->println("AT");
+        delay(200);
+        clearSerialBuffer();
+        
+        if (sendATCommand("AT", "OK", 3000)) {
+            Serial.printf("SUCCESS! Module responding at %d baud\n", LORA_FIXED_BAUD_RATE);
+            communicationEstablished = true;
+            break;
+        }
+        
+        // Check if ANY data was received
+        clearSerialBuffer();
+        loraSerial->println("AT");
+        delay(500);
+        if (loraSerial->available()) {
+            Serial.print("  Received data: ");
+            while (loraSerial->available()) {
+                Serial.printf("0x%02X ", loraSerial->read());
+            }
+            Serial.println("\n  (May indicate wrong baud rate or connection issue)");
+        } else {
+            Serial.println("  No response - waiting for M5Dial...");
+        }
+        
+        delay(2000); // Wait longer between attempts for M5Dial to initialize
+    }
+#else
+    // Try multiple baud rates - Grove-Wio-E5 can be 9600, 19200, or 115200
+    const int baudRates[] = {19200, 9600, 115200};
     
     for (int baud : baudRates) {
+        if (millis() - initStartTime >= LORA_INIT_TIMEOUT_MS) {
+            Serial.println("Initialization timeout reached");
+            break;
+        }
+        
         Serial.printf("\nTrying baud rate: %d\n", baud);
-        if (baud != 9600) {
+        esp_task_wdt_reset(); // Reset watchdog before trying new baud rate
+        
+        if (baud != 19200) {
             loraSerial->end(); // End previous attempt (skip for first attempt)
             delay(500);
         }
@@ -61,11 +116,18 @@ bool LoRaReceiver::setup(int rxPin, int txPin) {
         delay(200);
         clearSerialBuffer();
         
-        // Test with multiple AT command attempts
-        for (int attempt = 1; attempt <= 3; attempt++) {
-            Serial.printf("  Attempt %d/3 at %d baud...\n", attempt, baud);
+        // Test with multiple AT command attempts, respecting overall timeout
+        for (int attempt = 1; attempt <= 5; attempt++) {
+            if (millis() - initStartTime >= LORA_INIT_TIMEOUT_MS) {
+                Serial.println("Initialization timeout reached");
+                break;
+            }
             
-            if (sendATCommand("AT", "OK", 2000)) {
+            Serial.printf("  Attempt %d at %d baud (elapsed: %lu ms)...\n", 
+                         attempt, baud, millis() - initStartTime);
+            esp_task_wdt_reset(); // Reset watchdog during attempts
+            
+            if (sendATCommand("AT", "OK", 3000)) {
                 Serial.printf("SUCCESS! Module responding at %d baud\n", baud);
                 communicationEstablished = true;
                 break;
@@ -82,23 +144,30 @@ bool LoRaReceiver::setup(int rxPin, int txPin) {
                 }
                 Serial.println("\n  (Wrong baud rate or connection issue)");
             } else {
-                Serial.println("  No response - check connections!");
+                Serial.println("  No response - waiting for M5Dial...");
             }
             
-            delay(500);
+            delay(2000); // Wait longer between attempts
         }
         
         if (communicationEstablished) break;
     }
+#endif
     
     if (!communicationEstablished) {
         Serial.println("\n========================================");
-        Serial.println("FAILED: Could not communicate with module at any baud rate!");
+        Serial.printf("FAILED: Could not communicate with module after %lu seconds!\n", 
+                     (millis() - initStartTime) / 1000);
         Serial.println("Troubleshooting steps:");
-        Serial.println("1. Verify RX/TX are NOT swapped");
-        Serial.println("2. Check 3.3V power with multimeter");
-        Serial.println("3. Ensure Grove-Wio-E5 has antenna attached");
-        Serial.println("4. Try swapping RX/TX if connections are correct");
+        Serial.println("1. Ensure M5Dial is powered on and initialized");
+        Serial.println("2. Verify RX/TX are NOT swapped");
+        Serial.println("3. Check 3.3V power with multimeter");
+        Serial.println("4. Ensure Grove-Wio-E5 has antenna attached");
+#if LORA_DISABLE_BAUD_SEARCH
+        Serial.printf("5. Verify both devices are using %d baud\n", LORA_FIXED_BAUD_RATE);
+#else
+        Serial.println("5. Try enabling fixed baud rate mode (LORA_DISABLE_BAUD_SEARCH)");
+#endif
         Serial.println("========================================");
         return false;
     }

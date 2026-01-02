@@ -6,6 +6,7 @@
  */
 
 #include "lora_transmitter.hpp"
+#include <esp_task_wdt.h>
 
 LoRaTransmitter::LoRaTransmitter() : 
     loraSerial(nullptr), 
@@ -38,15 +39,89 @@ bool LoRaTransmitter::setup(int rxPin, int txPin, const LoRaWANConfig &loraConfi
     
     // Initialize UART for Grove-Wio-E5
     loraSerial = new HardwareSerial(1); // Use UART1
-    loraSerial->begin(19200, SERIAL_8N1, rxPin, txPin);
     
+    Serial.println("Initializing LoRa module - patient connection mode enabled");
+    Serial.printf("Initialization timeout: %d seconds\n", LORA_TX_INIT_TIMEOUT_MS / 1000);
     delay(2000); // Allow module to boot
     
-    // Test communication
-    clearSerialBuffer();
-    if (!sendATCommand("AT", "OK", 3000)) {
-        lastError = "Failed to communicate with Grove-Wio-E5 module";
+    bool communicationEstablished = false;
+    unsigned long initStartTime = millis();
+    
+#if LORA_TX_DISABLE_BAUD_SEARCH
+    // Use fixed baud rate - no search
+    Serial.printf("Using fixed baud rate: %d (baud search disabled)\n", LORA_TX_FIXED_BAUD_RATE);
+    loraSerial->begin(LORA_TX_FIXED_BAUD_RATE, SERIAL_8N1, rxPin, txPin);
+    delay(1000); // Wait for module to stabilize
+    
+    // Try to connect with extended timeout - no rush
+    int attempt = 0;
+    while (!communicationEstablished && (millis() - initStartTime < LORA_TX_INIT_TIMEOUT_MS)) {
+        attempt++;
+        Serial.printf("Connection attempt %d (elapsed: %lu ms)...\n", 
+                     attempt, millis() - initStartTime);
+        esp_task_wdt_reset(); // Reset watchdog during attempts
+        
+        clearSerialBuffer();
+        if (sendATCommand("AT", "OK", 2000)) {
+            Serial.printf("SUCCESS! Module responding at %d baud\n", LORA_TX_FIXED_BAUD_RATE);
+            communicationEstablished = true;
+            break;
+        }
+        delay(2000); // Patient delay between attempts
+    }
+#else
+    // Try multiple baud rates - Grove-Wio-E5 can be 9600, 19200, or 115200
+    const int baudRates[] = {19200, 9600, 115200};
+    
+    for (int baud : baudRates) {
+        if (millis() - initStartTime >= LORA_TX_INIT_TIMEOUT_MS) {
+            Serial.println("Initialization timeout reached");
+            break;
+        }
+        
+        Serial.printf("\nTrying baud rate: %d\n", baud);
+        esp_task_wdt_reset(); // Reset watchdog before trying new baud rate
+        
+        if (baud != 19200) {
+            loraSerial->end(); // End previous attempt (skip for first attempt)
+            delay(500);
+        }
+        loraSerial->begin(baud, SERIAL_8N1, rxPin, txPin);
+        
+        delay(1000); // Wait for module to stabilize
+        
+        // Test communication with multiple patient attempts
+        clearSerialBuffer();
+        for (int attempt = 1; attempt <= 5; attempt++) {
+            if (millis() - initStartTime >= LORA_TX_INIT_TIMEOUT_MS) {
+                Serial.println("Initialization timeout reached");
+                break;
+            }
+            
+            Serial.printf("  Attempt %d at %d baud (elapsed: %lu ms)...\n", 
+                         attempt, baud, millis() - initStartTime);
+            esp_task_wdt_reset(); // Reset watchdog during attempts
+            
+            if (sendATCommand("AT", "OK", 2000)) {
+                Serial.printf("SUCCESS! Module responding at %d baud\n", baud);
+                communicationEstablished = true;
+                break;
+            }
+            delay(2000); // Patient delay between attempts
+        }
+        
+        if (communicationEstablished) break;
+    }
+#endif
+    
+    if (!communicationEstablished) {
+        lastError = "Failed to communicate with Grove-Wio-E5 module after " + 
+                   String((millis() - initStartTime) / 1000) + " seconds";
         Serial.println(lastError);
+#if LORA_TX_DISABLE_BAUD_SEARCH
+        Serial.printf("Note: Using fixed baud rate %d - verify receiver uses same baud\n", 
+                     LORA_TX_FIXED_BAUD_RATE);
+#endif
         return false;
     }
     
