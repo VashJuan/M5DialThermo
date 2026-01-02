@@ -12,9 +12,9 @@
 #include "../shared/protocol_common.hpp"
 
 // Configuration flags
-#define LORA_TX_DISABLE_BAUD_SEARCH false // Set to true to skip baud rate search and use fixed 9600
-#define LORA_TX_FIXED_BAUD_RATE 9600      // Baud rate to use when DISABLE_BAUD_SEARCH is true
-#define LORA_TX_INIT_TIMEOUT_MS 60000     // Allow up to 60 seconds for connection (patient initialization)
+#define LORA_TX_DISABLE_BAUD_SEARCH true // Set to true to skip baud rate search and use fixed 9600
+#define LORA_TX_FIXED_BAUD_RATE 19200    // Baud rate to use when DISABLE_BAUD_SEARCH is true
+#define LORA_TX_INIT_TIMEOUT_MS 180000   // Allow up to 3 minutes for connection (patient initialization)
 
 /**
  * @class LoRaTransmitter
