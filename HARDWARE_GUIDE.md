@@ -166,6 +166,39 @@ Command failed - expected 'OK' but got 'AT'
 If you see "Command failed" messages, the Grove-Wio-E5 is configured for a
 different baud rate than your firmware.
 
+### Grove-Wio-E5 Power Consumption
+
+The system uses the
+[andresoliva/LoRa-E5 library](https://github.com/andresoliva/LoRa-E5) which
+provides automatic power management for battery-powered deployments.
+
+**Power Modes:**
+
+| Mode           | Current Draw | Notes                             |
+| -------------- | ------------ | --------------------------------- |
+| Active TX      | ~40mA        | During LoRa transmission          |
+| Active RX      | ~15mA        | Listening for messages            |
+| **Auto Sleep** | **21µA**     | Between operations (default mode) |
+| Deep Sleep     | ~2µA         | Manual control (not used)         |
+
+**Battery Life Estimation (with auto sleep):**
+
+Assuming transmit every 5 minutes:
+
+- TX time: ~1s @ 40mA
+- Sleep time: 299s @ 0.021mA
+- Average: (1×40 + 299×0.021) / 300 = **0.154 mA**
+
+**On common batteries:**
+
+- 2000mAh LiPo: ~540 days
+- 1000mAh LiPo: ~270 days
+- 500mAh LiPo: ~135 days
+
+> **Note:** The M5Dial transmitter is typically powered by USB-C, but the XIAO
+> receiver can run battery-powered for long deployments with the ultra-low sleep
+> mode.
+
 ## Grove-Wio-E5 Module Configuration
 
 ### Initial Setup

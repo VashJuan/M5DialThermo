@@ -93,9 +93,11 @@ Temperature automatically adjusts throughout the day based on your schedule:
 
 The M5Dial shows:
 
+- **Current Temperature** Temperature as measured at the M5Dial, not the stove
 - **Base Temperature:** Your baseline comfort temperature
-- **Current Offset:** How much above/below base right now
-- **Actual Target:** Base + Offset = Current target
+- **Current Offset:** How much above/below base right now ("Δ" or "delta" or
+  "diff")
+- **Actual Target:** Base + Offset = Current target ("aim" or "goal")
 
 **Example:**
 

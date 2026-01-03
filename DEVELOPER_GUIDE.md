@@ -13,7 +13,8 @@ and code architecture.
 **1. Visual Studio Code**
 
 - Download: https://code.visualstudio.com/
-- Primary IDE for development
+- Primary IDE for development (Arduino IDE may also work, but after 2025
+  purchase by Qualcomm Technologies, it may not remain FOSS)
 
 **2. PlatformIO Extension**
 
@@ -67,21 +68,26 @@ thermo/
 
 ## Building the Projects
 
+- These COM ports are arbitrary. power the devices on and off to find their COM
+  port number in the VS Code Serial Monitor terminal.
+
 ### Transmitter (M5Dial)
 
 **Build Commands:**
 
 ```bash
-# Build firmware
+# Build firmware - for the M5Dial
 pio run
 
-# Upload firmware to COM4
+# Before the next 2 steps, power M5Dial off, then press down the grey 'button' on the back while powering the M5Dial back on. (It will now be in code upload mode.)
+
+# Build + Upload firmware to COM4
 pio run --target upload --upload-port COM4
 
 # Upload filesystem (temps.csv)
 pio run --target uploadfs --upload-port COM4
 
-# Build + Upload + Monitor
+# After power cycling the M5Dial: View debug info via Serial Monitor
 pio run --target upload --upload-port COM4 && pio device monitor --port COM4 --baud 115200
 ```
 
@@ -98,6 +104,7 @@ lib_deps =
     m5stack/M5Unified @ ^0.1.17
     m5stack/M5GFX @ ^0.1.17
     adafruit/Adafruit MCP9808 Library @ ^2.0.2
+    andresoliva/LoRa-E5 @ ^1.1.0
 ```
 
 ### Receiver (XIAO ESP32S3)
@@ -110,10 +117,10 @@ cd receiver
 # Build firmware
 pio run
 
-# Upload firmware to COM6
+# Build + Upload firmware to COM6 (receiver must be in code upload mode: power it on while holding down the tiny reset button)
 pio run --target upload --upload-port COM6
 
-# Monitor
+# Serial Monitor (must power cycle after above step)
 pio device monitor --port COM6 --baud 115200
 ```
 
@@ -125,7 +132,89 @@ platform = espressif32
 board = seeed_xiao_esp32s3
 framework = arduino
 monitor_speed = 115200
+
+lib_deps =
+    andresoliva/LoRa-E5 @ ^1.1.0
 ```
+
+## LoRa Communication Library
+
+### andresoliva/LoRa-E5 Library
+
+**GitHub:** https://github.com/andresoliva/LoRa-E5
+
+Both the M5Dial transmitter and XIAO receiver use the
+[andresoliva/LoRa-E5](https://github.com/andresoliva/LoRa-E5) library for
+Grove-Wio-E5 module communication. This library provides significant
+enhancements over basic AT command implementations.
+
+#### Key Benefits
+
+**1. Power Management**
+
+- Ultra-low sleep current: **21µA** (vs. 2mA for active listening)
+- Automatic wake/sleep cycling
+- ESP32-S3 compatibility tested and optimized
+- Ideal for battery-powered deployments
+
+**2. Enhanced Communication Reliability**
+
+- Improved buffer management with double-clear RX buffers
+- Command timing measurements for diagnostics
+- Multiple retry attempts with robust error handling
+- Flexible response parsing handles module variations
+
+**3. Advanced Monitoring**
+
+- Automatic signal quality reports every 5 minutes
+  - RSSI (Received Signal Strength Indicator)
+  - SNR (Signal-to-Noise Ratio)
+  - Data rate metrics
+- Enhanced debugging with detailed diagnostic messages
+- Improved LoRaWAN join process with feedback
+
+**4. Full Feature Set**
+
+- Complete LoRaWAN configuration (spread factor, bandwidth, TX power)
+- Multiple message types:
+  - String messages
+  - Hex/binary data
+  - Confirmed/unconfirmed packets
+- P2P (peer-to-peer) communication support
+- Power consumption estimation tools
+
+#### Usage Example
+
+```cpp
+#include <LoRa_E5.h>
+
+LoRa_E5 lora(&Serial1, 43, 44);  // TX, RX pins
+
+void setup() {
+    lora.begin();
+
+    // Configure for ultra-low power
+    lora.setAutoLowPowerMode(true);
+
+    // Join LoRaWAN network
+    if (lora.joinOTAA(appEui, appKey)) {
+        Serial.println("Joined network");
+    }
+}
+
+void loop() {
+    // Send data (module auto-sleeps between transmissions)
+    lora.sendMsg("STOVE_ON", 8, true);  // Confirmed message
+
+    // Module automatically enters 21µA sleep mode
+    delay(60000);  // Wait 1 minute
+}
+```
+
+#### Power Consumption
+
+See [HARDWARE_GUIDE.md](HARDWARE_GUIDE.md#grove-wio-e5-power-consumption) for
+detailed power specifications.
 
 ## Configuration Files
 

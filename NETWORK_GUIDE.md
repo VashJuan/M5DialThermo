@@ -10,15 +10,15 @@ troubleshooting for the M5Dial Smart Thermostat system.
 ### System Overview
 
 ```
-M5Dial (Transmitter)
+M5Dial (internal RTC & external temperature sensor: MCP9808 or similar)
         ↓
-    [LoRa P2P]
+[LoRa P2P - transmitter side] - Lora Wio-E5-HF
+        ↓
+[LoRa P2P - receiver side] - Lora Wio-E5-HF
         ↓
 XIAO ESP32S3 (Receiver)
         ↓
-   Relay Control
-        ↓
-  Heater/Stove
+Relay Control (inside the Heater/Stove)
 ```
 
 ### Dual Communication Modes

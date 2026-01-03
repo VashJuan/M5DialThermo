@@ -174,6 +174,16 @@ bool LoRaReceiver::setup(int rxPin, int txPin) {
     
     Serial.println("Grove-Wio-E5 communication established");
     
+    // Disable echo to prevent command echoing
+    Serial.println("Disabling echo mode...");
+    clearSerialBuffer();
+    delay(100);
+    if (sendATCommand("ATE0", "OK", 2000)) {
+        Serial.println("Echo disabled successfully");
+    } else {
+        Serial.println("Warning: Could not disable echo (continuing anyway)");
+    }
+    
     // Reset module to ensure clean state
     if (!reset()) {
         Serial.println("Failed to reset Grove-Wio-E5 module");
@@ -529,17 +539,47 @@ bool LoRaReceiver::sendATCommand(const String& command, const String& expectedRe
     
     Serial.printf("Received: %s (took %lu ms)\n", response.c_str(), commandTime);
     
-    // More flexible response checking - Grove-Wio-E5 returns "+AT: OK" format
-    bool success = (response.indexOf(expectedResponse) >= 0) || 
-                   (expectedResponse == "OK" && (response.indexOf("+OK") >= 0 || 
-                                                  response.indexOf("OK") >= 0 ||
-                                                  response.indexOf("+AT: OK") >= 0)) ||
-                   (response.length() > 0 && expectedResponse.length() > 0 && 
-                    response.indexOf("+") == 0); // Any "+XXX" response is valid acknowledgment
+    // Handle echo: if module has echo enabled, the command will be echoed back first
+    // Check if response starts with the command (echo) and contains the expected response
+    String responseUpper = response;
+    responseUpper.toUpperCase();
+    String commandUpper = command;
+    commandUpper.toUpperCase();
+    String expectedUpper = expectedResponse;
+    expectedUpper.toUpperCase();
+    
+    // If we got echo, look for expected response after the echo
+    bool success = false;
+    if (responseUpper.startsWith(commandUpper)) {
+        // Echo detected, check for expected response after echo
+        String afterEcho = response.substring(command.length());
+        afterEcho.trim();
+        success = (afterEcho.indexOf(expectedResponse) >= 0) || 
+                  (expectedResponse == "OK" && (afterEcho.indexOf("+OK") >= 0 || 
+                                                 afterEcho.indexOf("OK") >= 0 ||
+                                                 afterEcho.indexOf("+AT: OK") >= 0));
+    } else {
+        // No echo, check response directly using original logic
+        success = (response.indexOf(expectedResponse) >= 0) || 
+                  (expectedResponse == "OK" && (response.indexOf("+OK") >= 0 || 
+                                                 response.indexOf("OK") >= 0 ||
+                                                 response.indexOf("+AT: OK") >= 0)) ||
+                  (response.length() > 0 && expectedResponse.length() > 0 && 
+                   response.indexOf("+") == 0); // Any "+XXX" response is valid acknowledgment
+    }
     
     if (!success && expectedResponse != "") {
         Serial.printf("Command failed - expected '%s' but got '%s'\n", 
                      expectedResponse.c_str(), response.c_str());
+        // Print hex dump for debugging
+        Serial.print("  Received data: ");
+        for (unsigned int i = 0; i < response.length() && i < 50; i++) {
+            Serial.printf("0x%02X ", (unsigned char)response.charAt(i));
+        }
+        Serial.println();
+        if (responseUpper.startsWith(commandUpper)) {
+            Serial.println("  (May indicate wrong baud rate or connection issue)");
+        }
     }
     
     return success;

@@ -127,6 +127,16 @@ bool LoRaTransmitter::setup(int rxPin, int txPin, const LoRaWANConfig &loraConfi
     
     Serial.println("Grove-Wio-E5 communication established");
     
+    // Disable echo to prevent command echoing
+    Serial.println("Disabling echo mode...");
+    clearSerialBuffer();
+    delay(100);
+    if (sendATCommand("ATE0", "OK", 2000)) {
+        Serial.println("Echo disabled successfully");
+    } else {
+        Serial.println("Warning: Could not disable echo (continuing anyway)");
+    }
+    
     // Reset module to ensure clean state
     if (!reset()) {
         lastError = "Failed to reset Grove-Wio-E5 module";
@@ -606,13 +616,41 @@ bool LoRaTransmitter::sendATCommand(const String &command, const String &expecte
     String response = readResponse(timeout);
     Serial.printf("RX: %s\n", response.c_str());
     
-    // More flexible response checking
-    bool success = (response.indexOf(expectedResponse) >= 0) || 
-                   (expectedResponse == "OK" && response.indexOf("+OK") >= 0);
+    // Handle echo: if module has echo enabled, the command will be echoed back first
+    // Check if response starts with the command (echo) and contains the expected response
+    String responseUpper = response;
+    responseUpper.toUpperCase();
+    String commandUpper = command;
+    commandUpper.toUpperCase();
+    String expectedUpper = expectedResponse;
+    expectedUpper.toUpperCase();
+    
+    // If we got echo, look for expected response after the echo
+    bool success = false;
+    if (responseUpper.startsWith(commandUpper)) {
+        // Echo detected, check for expected response after echo
+        String afterEcho = response.substring(command.length());
+        afterEcho.trim();
+        success = (afterEcho.indexOf(expectedResponse) >= 0) || 
+                  (expectedResponse == "OK" && (afterEcho.indexOf("+OK") >= 0 || afterEcho.indexOf("OK") >= 0));
+    } else {
+        // No echo, check response directly
+        success = (response.indexOf(expectedResponse) >= 0) || 
+                  (expectedResponse == "OK" && response.indexOf("+OK") >= 0);
+    }
     
     if (!success && expectedResponse != "") {
         Serial.printf("Command failed - expected '%s' but got '%s'\n", 
                      expectedResponse.c_str(), response.c_str());
+        // Print hex dump for debugging
+        Serial.print("  Received data: ");
+        for (unsigned int i = 0; i < response.length() && i < 50; i++) {
+            Serial.printf("0x%02X ", (unsigned char)response.charAt(i));
+        }
+        Serial.println();
+        if (responseUpper.startsWith(commandUpper)) {
+            Serial.println("  (May indicate wrong baud rate or connection issue)");
+        }
     }
     
     return success;
