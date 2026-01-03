@@ -616,40 +616,38 @@ bool LoRaTransmitter::sendATCommand(const String &command, const String &expecte
     String response = readResponse(timeout);
     Serial.printf("RX: %s\n", response.c_str());
     
-    // Handle echo: if module has echo enabled, the command will be echoed back first
-    // Check if response starts with the command (echo) and contains the expected response
-    String responseUpper = response;
-    responseUpper.toUpperCase();
-    String commandUpper = command;
-    commandUpper.toUpperCase();
-    String expectedUpper = expectedResponse;
-    expectedUpper.toUpperCase();
-    
-    // If we got echo, look for expected response after the echo
-    bool success = false;
-    if (responseUpper.startsWith(commandUpper)) {
-        // Echo detected, check for expected response after echo
-        String afterEcho = response.substring(command.length());
-        afterEcho.trim();
-        success = (afterEcho.indexOf(expectedResponse) >= 0) || 
-                  (expectedResponse == "OK" && (afterEcho.indexOf("+OK") >= 0 || afterEcho.indexOf("OK") >= 0));
-    } else {
-        // No echo, check response directly
-        success = (response.indexOf(expectedResponse) >= 0) || 
-                  (expectedResponse == "OK" && response.indexOf("+OK") >= 0);
-    }
+    // Handle echo: module may echo the command before responding
+    // Check if the expected response exists anywhere in the full response
+    // This handles cases where format is "AT\r\nOK\r\n" or "AT\r\n+AT: OK\r\n"
+    bool success = (response.indexOf(expectedResponse) >= 0) || 
+                   (expectedResponse == "OK" && (response.indexOf("+OK") >= 0 || 
+                                                  response.indexOf("\nOK") >= 0 ||
+                                                  response.indexOf("\r\nOK") >= 0 ||
+                                                  response.indexOf("+AT: OK") >= 0 ||
+                                                  (response.indexOf("OK") >= 0 && response.length() > command.length())));
     
     if (!success && expectedResponse != "") {
         Serial.printf("Command failed - expected '%s' but got '%s'\n", 
                      expectedResponse.c_str(), response.c_str());
-        // Print hex dump for debugging
-        Serial.print("  Received data: ");
-        for (unsigned int i = 0; i < response.length() && i < 50; i++) {
-            Serial.printf("0x%02X ", (unsigned char)response.charAt(i));
-        }
-        Serial.println();
-        if (responseUpper.startsWith(commandUpper)) {
-            Serial.println("  (May indicate wrong baud rate or connection issue)");
+        // Print hex dump for debugging if we got data
+        if (response.length() > 0) {
+            Serial.print("  Received data: ");
+            for (unsigned int i = 0; i < response.length() && i < 50; i++) {
+                Serial.printf("0x%02X ", (unsigned char)response.charAt(i));
+            }
+            Serial.println();
+            // Check if this looks like echo
+            String responseUpper = response;
+            responseUpper.toUpperCase();
+            String commandUpper = command;
+            commandUpper.toUpperCase();
+            if (responseUpper.startsWith(commandUpper) && response.indexOf("OK") < 0) {
+                Serial.println("  (Echo received but no OK - module may need reset or longer timeout)");
+            } else if (response.length() > 0 && response.indexOf(command) < 0 && response.indexOf(expectedResponse) < 0) {
+                Serial.println("  (Unexpected response - may indicate wrong baud rate)");
+            }
+        } else {
+            Serial.println("  No response received - check connections and power");
         }
     }
     
@@ -672,14 +670,16 @@ String LoRaTransmitter::readResponse(int timeout)
     
     String response = "";
     unsigned long startTime = millis();
+    unsigned long lastDataTime = millis();
     
     while (millis() - startTime < timeout) {
         if (loraSerial->available()) {
             char c = loraSerial->read();
             response += c;
-            
-            // Reset timeout on new data
-            startTime = millis();
+            lastDataTime = millis(); // Reset data timeout
+        } else if (response.length() > 0 && (millis() - lastDataTime > 200)) {
+            // If we've received data and there's been 200ms of silence, consider response complete
+            break;
         }
         delay(10);
     }
