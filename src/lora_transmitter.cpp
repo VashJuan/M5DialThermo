@@ -210,7 +210,8 @@ bool LoRaTransmitter::configureP2P()
     Serial.println("Configuring P2P mode...");
     
     // Enter TEST mode for P2P communication
-    if (!sendATCommand("AT+MODE=TEST", "OK")) {
+    // Success response is "+MODE: TEST", not "OK"
+    if (!sendATCommand("AT+MODE=TEST", "TEST")) {
         Serial.println("Failed to enter TEST mode");
         return false;
     }
@@ -242,8 +243,10 @@ bool LoRaTransmitter::configureLoRaWAN()
     Serial.println("Configuring LoRaWAN transmitter settings...");
     
     // Set to LoRaWAN mode (OTAA if configured, otherwise ABP)
+    // Success response is "+MODE: LWOTAA" or "+MODE: LWABP", not "OK"
     String modeCommand = config.otaa ? "AT+MODE=LWOTAA" : "AT+MODE=LWABP";
-    if (!sendATCommand(modeCommand, "OK")) {
+    String expectedMode = config.otaa ? "LWOTAA" : "LWABP";
+    if (!sendATCommand(modeCommand, expectedMode)) {
         return false;
     }
     

@@ -27,11 +27,11 @@ system.
 ### M5Dial Transmitter Wiring
 
 ```
-M5Dial ESP32-S3          Grove-Wio-E5
+M5Dial Port B            Grove-Wio-E5
 ===============          ============
-GPIO43 (TX)       →→→    RX (Module input)
-GPIO44 (RX)       ←←←    TX (Module output)
-3.3V              →→→    VCC
+GPIO2 (OUT/TX)    →→→    RX (Module input)
+GPIO1 (IN/RX)     ←←←    TX (Module output)
+5V                →→→    VCC
 GND               →→→    GND
 
 M5Dial ESP32-S3          MCP9808 Sensor
@@ -85,13 +85,13 @@ Both devices are configured for consistent communication:
 // In receiver/src/lora_receiver.hpp & src/lora_transmitter.hpp
 
 #define LORA_DISABLE_BAUD_SEARCH true  // Fixed baud rate enabled
-#define LORA_FIXED_BAUD_RATE 19200     // Current setting: 19200 baud
+#define LORA_FIXED_BAUD_RATE 9600      // Factory default: 9600 baud
 #define LORA_INIT_TIMEOUT_MS 180000    // 3-minute timeout
 ```
 
 **Key Points:**
 
-- **LoRa Module Baud:** 19200 (currently set)
+- **LoRa Module Baud:** 9600 (Grove-Wio-E5 factory default)
 - **USB Serial Monitor:** 115200 (for debugging)
 - **Timeout:** 3 minutes (180 seconds)
 - **Auto-detection:** Currently DISABLED for predictable synchronization
@@ -113,34 +113,37 @@ Both devices are configured for consistent communication:
 
 ### Changing Baud Rate
 
-**To use different baud rate (9600 or 115200):**
+**Current configuration uses 9600 (factory default) - no changes needed.**
+
+**To use different baud rate (115200 for faster communication):**
 
 1. Edit `receiver/src/lora_receiver.hpp`:
 
    ```cpp
-   #define LORA_FIXED_BAUD_RATE 9600  // or 115200
+   #define LORA_FIXED_BAUD_RATE 115200
    ```
 
 2. Edit `src/lora_transmitter.hpp`:
 
    ```cpp
-   #define LORA_TX_FIXED_BAUD_RATE 9600  // or 115200
+   #define LORA_TX_FIXED_BAUD_RATE 115200
    ```
 
-3. **Configure Grove-Wio-E5 modules** (both):
+3. **Configure Grove-Wio-E5 modules** (both) via AT commands:
 
    ```
-   Connect via USB-TTL adapter
-   Send: AT+UART=9600    (or 115200)
-   Module responds: +OK
+   Connect via USB-TTL adapter at 9600 baud
+   Send: AT+UART=TIMEOUT,115200
+   Module responds: +UART: 115200
+   Power cycle modules to apply new baud rate
    ```
 
 4. Rebuild and upload both firmwares
 
 **Common Grove-Wio-E5 Baud Rates:**
 
-- 9600 - Lower speed, more reliable
-- 19200 - Medium speed (current default)
+- 9600 - Factory default, most reliable (current setting)
+- 19200 - Medium speed
 - 115200 - Highest speed, may be less reliable
 
 ### Testing Baud Rate
@@ -148,9 +151,13 @@ Both devices are configured for consistent communication:
 **Serial Monitor Output (Successful):**
 
 ```
-Using fixed baud rate: 19200 (baud search disabled)
-Connection attempt 1 (elapsed: 2001 ms)...
-SUCCESS! Module responding at 19200 baud
+Using fixed baud rate: 9600 (baud search disabled)
+Waiting for module to fully boot (5 seconds)...
+Connection attempt 1 (elapsed: 6501 ms)...
+TX: AT
+RX: +AT: OK
+SUCCESS! Module responding at 9600 baud
+Grove-Wio-E5 communication established
 ```
 
 **Serial Monitor Output (Failed):**

@@ -25,7 +25,7 @@ technical specifications
 
 - Complete wiring diagrams
 - Pin assignments (M5Dial & XIAO)
-- UART baud rate configuration (currently 19200)
+- UART baud rate configuration (9600 - factory default)
 - Grove-Wio-E5 setup
 - Power requirements
 - Range optimization
@@ -67,7 +67,7 @@ workflow
 
 1. Follow [Hardware Guide](HARDWARE_GUIDE.md) for wiring
 2. Connect Grove-Wio-E5 modules to both devices
-3. **Current baud rate: 19200** (both devices)
+3. **Current baud rate: 9600** (both devices - Grove-Wio-E5 factory default)
 4. Power on, check serial monitor at 115200
 
 ### Developer Setup
@@ -132,7 +132,7 @@ workflow
 
 ## Current Configuration
 
-**LoRa UART Baud Rate:** 19200 (fixed)  
+**LoRa UART Baud Rate:** 9600 (Grove-Wio-E5 factory default)  
 **USB Serial Monitor:** 115200  
 **Connection Timeout:** 3 minutes  
 **Auto Baud Search:** Disabled (for reliable sync)

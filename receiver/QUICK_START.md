@@ -88,10 +88,17 @@ Hardware: XIAO ESP32S3 + Grove-Wio-E5
 ====================================
 Status LED initialized on pin 9
 Stove relay initialized on pin 10 (initial state: OFF)
+Waiting for module to fully boot (5 seconds)...
+Connection attempt 1 (elapsed: 6501 ms)...
+Sent: AT
+Received: +AT: OK (took 600 ms)
+SUCCESS! Module responding at 9600 baud
 Grove-Wio-E5 communication established
-Successfully joined LoRaWAN network
-Auto low power mode enabled - module will sleep automatically
-Initial signal quality: RSSI: -65, SNR: 8.5, DR: EU868 DR4 SF8 BW125K
+Disabling echo mode...
+Configuring P2P mode...
+Sent: AT+MODE=TEST
+Received: +MODE: TEST (took 790 ms)
+P2P mode configured successfully
 ====================================
 System Ready - Waiting for commands
 Safety timeout: 10 minutes
