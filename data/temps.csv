@@ -10,7 +10,7 @@
 #   - Hours: 1=1AM, 2=2AM, ..., 12=Noon, 13=1PM, ..., 24=Midnight
 
 # Base temperature in Fahrenheit
-BaseTemperature,74.0
+BaseTemperature,77.0
 
 # Fallback timezone for when NTP/WiFi is not available
 FallbackTimezone,PST8
