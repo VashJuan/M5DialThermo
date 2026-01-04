@@ -51,7 +51,20 @@ bool LoRaTransmitter::setup(int rxPin, int txPin, const LoRaWANConfig &loraConfi
     // Use fixed baud rate - no search
     Serial.printf("Using fixed baud rate: %d (baud search disabled)\n", LORA_TX_FIXED_BAUD_RATE);
     loraSerial->begin(LORA_TX_FIXED_BAUD_RATE, SERIAL_8N1, rxPin, txPin);
-    delay(1000); // Wait for module to stabilize
+    
+    // Give module MUCH more time to fully boot - some modules need 5+ seconds
+    Serial.println("Waiting for module to fully boot (5 seconds)...");
+    delay(5000);
+    
+    // Send multiple wake-up commands to ensure module is responsive
+    Serial.println("Sending wake-up sequence...");
+    for (int i = 0; i < 5; i++) {
+        clearSerialBuffer();
+        loraSerial->println();
+        delay(200);
+    }
+    clearSerialBuffer();
+    delay(500);
     
     // Try to connect with extended timeout - no rush
     int attempt = 0;
