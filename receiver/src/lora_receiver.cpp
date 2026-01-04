@@ -15,7 +15,7 @@ LoRaReceiver::LoRaReceiver() :
     isInitialized(false),
     currentMode(LoRaCommunicationMode::P2P),
     quietLogCounter(0),
-    quietLogInterval(1) // Temporarily set to 1 for full debug output  // Log every 200th check when no messages
+    quietLogInterval(200) // Log every 200th check when no messages
 {
     // Constructor
 }
@@ -647,6 +647,12 @@ String LoRaReceiver::readResponse(int timeout) {
             // Only break if we've waited at least 500ms after last data
             unsigned long silenceTime = millis() - lastDataTime;
             if (silenceTime > 500) {
+                // For TX commands, must wait for TX DONE after the echo
+                // SF12 transmission can take several seconds
+                if (response.indexOf("TXLRPKT") >= 0 && response.indexOf("TX DONE") < 0 && silenceTime < 11000) {
+                    delay(10);
+                    continue;
+                }
                 // For RX commands, must wait for RX DONE or received data after the echo
                 // RX window can be long at SF12, wait up to 11 seconds
                 if (response.indexOf("RXLRPKT") >= 0 && response.indexOf("RX DONE") < 0 && response.indexOf("RXLRPKT,") < 0 && silenceTime < 11000) {

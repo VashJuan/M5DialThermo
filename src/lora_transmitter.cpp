@@ -723,9 +723,6 @@ String LoRaTransmitter::readResponse(int timeout)
                 // RX window can be long at SF12, wait up to 11 seconds
                 if (response.indexOf("RXLRPKT") >= 0 && response.indexOf("RX DONE") < 0 && response.indexOf("RXLRPKT,") < 0 && silenceTime < 11000) {
                     // Keep waiting for RX DONE or received message data
-                    if (silenceTime == 510 || silenceTime % 1000 == 0) { // Log occasionally
-                        Serial.printf("[readResponse] Waiting for RX completion... (silence: %lu ms)\n", silenceTime);
-                    }
                     delay(10);
                     continue;
                 }
