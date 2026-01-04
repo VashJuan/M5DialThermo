@@ -15,7 +15,7 @@ LoRaReceiver::LoRaReceiver() :
     isInitialized(false),
     currentMode(LoRaCommunicationMode::P2P),
     quietLogCounter(0),
-    quietLogInterval(200)  // Log every 200th check when no messages
+    quietLogInterval(1) // Temporarily set to 1 for full debug output  // Log every 200th check when no messages
 {
     // Constructor
 }
@@ -260,14 +260,14 @@ bool LoRaReceiver::configureP2P()
     
     // Configure RF parameters for P2P using constants from protocol_common.hpp
     String rfConfigCommand = "AT+TEST=RFCFG," + 
-                           String(P2P_FREQUENCY) + "000000," +  // Convert MHz to Hz
+                           String(P2P_FREQUENCY) + "," +  // Frequency in MHz (module converts to Hz)
                            P2P_SPREADING_FACTOR + "," +
                            P2P_BANDWIDTH + "," +
                            P2P_CODING_RATE + "," +
                            P2P_PREAMBLE_LENGTH + "," +
                            P2P_TX_POWER;
     
-    if (!sendATCommand(rfConfigCommand, "OK")) {
+    if (!sendATCommand(rfConfigCommand, "RFCFG")) {
         Serial.println("Failed to configure P2P RF parameters");
         return false;
     }
@@ -395,36 +395,37 @@ bool LoRaReceiver::sendP2PMessage(const String &message)
 
 String LoRaReceiver::receiveP2PMessage(int timeout)
 {
-    // Enter receive mode
+    // Enter receive mode and get the full response
     quietLogCounter++;
     bool shouldLog = (quietLogCounter % quietLogInterval == 0);
     
-    if (!sendATCommand("AT+TEST=RXLRPKT", "RX DONE", timeout)) {
-        return "";
+    // Get response from sendATCommand which already waits for full RX window
+    clearSerialBuffer();
+    loraSerial->println("AT+TEST=RXLRPKT");
+    if (shouldLog) {
+        Serial.println("Sent: AT+TEST=RXLRPKT");
     }
     
-    // Wait for received message
-    unsigned long startTime = millis();
-    while (millis() - startTime < timeout) {
-        String response = readResponse(100);
+    String response = readResponse(timeout);
+    
+    if (shouldLog) {
+        Serial.printf("Received: %s (took %lu ms)\n", response.c_str(), timeout);
+    }
+    
+    // Look for received data in format: +TEST: RX "hexdata"
+    int rxIndex = response.indexOf("+TEST: RX ");
+    if (rxIndex >= 0) {
+        int startQuote = response.indexOf('"', rxIndex);
+        int endQuote = response.indexOf('"', startQuote + 1);
         
-        // Look for received data in format: +TEST: RX "hexdata"
-        int rxIndex = response.indexOf("+TEST: RX ");
-        if (rxIndex >= 0) {
-            int startQuote = response.indexOf('"', rxIndex);
-            int endQuote = response.indexOf('"', startQuote + 1);
-            
-            if (startQuote >= 0 && endQuote >= 0) {
-                String hexData = response.substring(startQuote + 1, endQuote);
-                String decodedMessage = ProtocolHelper::hexToAscii(hexData);
-                Serial.printf("P2P message received: %s (hex: %s)\n", 
-                            decodedMessage.c_str(), hexData.c_str());
-                quietLogCounter = 0; // Reset counter on activity
-                return decodedMessage;
-            }
+        if (startQuote >= 0 && endQuote >= 0) {
+            String hexData = response.substring(startQuote + 1, endQuote);
+            String decodedMessage = ProtocolHelper::hexToAscii(hexData);
+            Serial.printf("P2P message received: %s (hex: %s)\n", 
+                        decodedMessage.c_str(), hexData.c_str());
+            quietLogCounter = 0; // Reset counter on activity
+            return decodedMessage;
         }
-        
-        delay(10);
     }
     
     // Only log "no message" periodically to reduce spam
@@ -447,7 +448,8 @@ String LoRaReceiver::checkForCommand() {
     // Use different methods based on current communication mode
     if (currentMode == LoRaCommunicationMode::P2P) {
         // P2P mode: Check for P2P messages
-        return receiveP2PMessage(100); // Quick check, don't block long
+        // Use 13 second timeout to allow full RX window (11s) plus overhead
+        return receiveP2PMessage(13000);
     } else {
         // LoRaWAN mode: Check for downlink messages
         if (loraSerial->available()) {
@@ -634,6 +636,8 @@ String LoRaReceiver::readResponse(int timeout) {
     unsigned long lastDataTime = millis();
     
     while (millis() - startTime < timeout) {
+        esp_task_wdt_reset(); // Reset watchdog during long waits
+        
         if (loraSerial->available()) {
             char c = loraSerial->read();
             response += c;
@@ -643,6 +647,13 @@ String LoRaReceiver::readResponse(int timeout) {
             // Only break if we've waited at least 500ms after last data
             unsigned long silenceTime = millis() - lastDataTime;
             if (silenceTime > 500) {
+                // For RX commands, must wait for RX DONE or received data after the echo
+                // RX window can be long at SF12, wait up to 11 seconds
+                if (response.indexOf("RXLRPKT") >= 0 && response.indexOf("RX DONE") < 0 && response.indexOf("RXLRPKT,") < 0 && silenceTime < 11000) {
+                    // Keep waiting for RX DONE or received message data
+                    delay(10);
+                    continue;
+                }
                 // If response looks incomplete (just echo with no OK), wait a bit more
                 if (response.length() <= 10 && response.indexOf("OK") < 0 && silenceTime < 1000) {
                     // Keep waiting, might be slow response

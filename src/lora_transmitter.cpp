@@ -396,32 +396,27 @@ bool LoRaTransmitter::sendP2PMessage(const String &message)
 
 String LoRaTransmitter::receiveP2PMessage(int timeout)
 {
-    // Enter receive mode
-    if (!sendATCommand("AT+TEST=RXLRPKT", "RX DONE", timeout)) {
-        return "";
-    }
+    // Enter receive mode and get the full response
+    clearSerialBuffer();
+    loraSerial->println("AT+TEST=RXLRPKT");
+    Serial.println("TX: AT+TEST=RXLRPKT");
     
-    // Wait for received message
-    unsigned long startTime = millis();
-    while (millis() - startTime < timeout) {
-        String response = readResponse(100);
+    String response = readResponse(timeout);
+    Serial.printf("RX: %s\n", response.c_str());
+    
+    // Look for received data in format: +TEST: RX "hexdata"
+    int rxIndex = response.indexOf("+TEST: RX ");
+    if (rxIndex >= 0) {
+        int startQuote = response.indexOf('"', rxIndex);
+        int endQuote = response.indexOf('"', startQuote + 1);
         
-        // Look for received data in format: +TEST: RX "hexdata"
-        int rxIndex = response.indexOf("+TEST: RX ");
-        if (rxIndex >= 0) {
-            int startQuote = response.indexOf('"', rxIndex);
-            int endQuote = response.indexOf('"', startQuote + 1);
-            
-            if (startQuote >= 0 && endQuote >= 0) {
-                String hexData = response.substring(startQuote + 1, endQuote);
-                String decodedMessage = ProtocolHelper::hexToAscii(hexData);
-                Serial.printf("P2P message received: %s (hex: %s)\n", 
-                            decodedMessage.c_str(), hexData.c_str());
-                return decodedMessage;
-            }
+        if (startQuote >= 0 && endQuote >= 0) {
+            String hexData = response.substring(startQuote + 1, endQuote);
+            String decodedMessage = ProtocolHelper::hexToAscii(hexData);
+            Serial.printf("P2P message received: %s (hex: %s)\n", 
+                        decodedMessage.c_str(), hexData.c_str());
+            return decodedMessage;
         }
-        
-        delay(10);
     }
     
     Serial.println("No P2P message received within timeout");
@@ -707,6 +702,8 @@ String LoRaTransmitter::readResponse(int timeout)
     unsigned long lastDataTime = millis();
     
     while (millis() - startTime < timeout) {
+        esp_task_wdt_reset(); // Reset watchdog during long waits
+        
         if (loraSerial->available()) {
             char c = loraSerial->read();
             response += c;
@@ -716,10 +713,25 @@ String LoRaTransmitter::readResponse(int timeout)
             // Only break if we've waited at least 500ms after last data
             unsigned long silenceTime = millis() - lastDataTime;
             if (silenceTime > 500) {
+                // For TX commands, must wait for TX DONE after the echo
+                if (response.indexOf("TXLRPKT") >= 0 && response.indexOf("TX DONE") < 0 && silenceTime < 3000) {
+                    // Keep waiting for TX DONE after transmission completes
+                    delay(10);
+                    continue;
+                }
+                // For RX commands, must wait for RX DONE or received data after the echo
+                // RX window can be long at SF12, wait up to 11 seconds
+                if (response.indexOf("RXLRPKT") >= 0 && response.indexOf("RX DONE") < 0 && response.indexOf("RXLRPKT,") < 0 && silenceTime < 11000) {
+                    // Keep waiting for RX DONE or received message data
+                    if (silenceTime == 510 || silenceTime % 1000 == 0) { // Log occasionally
+                        Serial.printf("[readResponse] Waiting for RX completion... (silence: %lu ms)\n", silenceTime);
+                    }
+                    delay(10);
+                    continue;
+                }
                 // If response looks incomplete (just echo with no OK/DONE), wait longer
-                // TX DONE can take time after echo is received
                 if (response.length() <= 10 && response.indexOf("OK") < 0 && response.indexOf("DONE") < 0 && silenceTime < 2000) {
-                    // Keep waiting for TX DONE or other completion messages
+                    // Keep waiting for completion messages
                     delay(10);
                     continue;
                 }

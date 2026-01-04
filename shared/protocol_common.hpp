@@ -43,9 +43,9 @@
 #define P2P_SYNC_WORD "OFF"         // Sync word
 
 // P2P timeout constants
-#define P2P_TX_TIMEOUT 3000 // 3 second transmit timeout
-#define P2P_RX_TIMEOUT 5000 // 5 second receive timeout
-#define P2P_POWER 14        // P2P power in dBm (for compatibility)
+#define P2P_TX_TIMEOUT 3000  // 3 second transmit timeout
+#define P2P_RX_TIMEOUT 13000 // 13 second receive timeout (allows 11s RX window + overhead)
+#define P2P_POWER 14         // P2P power in dBm (for compatibility)
 
 // Communication mode selection
 enum class LoRaCommunicationMode
