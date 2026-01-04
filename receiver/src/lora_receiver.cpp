@@ -59,11 +59,13 @@ bool LoRaReceiver::setup(int rxPin, int txPin) {
                      attempt, millis() - initStartTime);
         esp_task_wdt_reset(); // Reset watchdog during attempts
         
-        // Send wake-up sequence
+        // Send wake-up sequence - send a blank line first to clear any buffer
+        clearSerialBuffer();
         loraSerial->println();
-        delay(200);
+        delay(100);
+        clearSerialBuffer();
         loraSerial->println("AT");
-        delay(200);
+        delay(100);
         clearSerialBuffer();
         
         if (sendATCommand("AT", "OK", 3000)) {
@@ -593,9 +595,20 @@ String LoRaReceiver::readResponse(int timeout) {
             char c = loraSerial->read();
             response += c;
             lastDataTime = millis(); // Reset data timeout
-        } else if (response.length() > 0 && (millis() - lastDataTime > 200)) {
-            // If we've received data and there's been 200ms of silence, consider response complete
-            break;
+        } else if (response.length() > 0) {
+            // For short responses during init (like echoed AT), wait longer for the actual response
+            // Only break if we've waited at least 500ms after last data
+            unsigned long silenceTime = millis() - lastDataTime;
+            if (silenceTime > 500) {
+                // If response looks incomplete (just echo with no OK), wait a bit more
+                if (response.length() <= 10 && response.indexOf("OK") < 0 && silenceTime < 1000) {
+                    // Keep waiting, might be slow response
+                    delay(10);
+                    continue;
+                }
+                // Got enough silence, response is complete
+                break;
+            }
         }
         delay(10);
     }
