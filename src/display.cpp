@@ -34,9 +34,9 @@ void Display::initializeAreaConfigs()
     // Default Area configurations: font, text size, text color, background color
     areaConfigs[TITLE] = AreaConfig(&fonts::Font2, 1, COLOR_BLACK, COLOR_YELLOW);
     areaConfigs[TIME] = AreaConfig(&fonts::Font2, 1, COLOR_BLACK, COLOR_YELLOW);
-    areaConfigs[TEMP] = AreaConfig(&fonts::FreeSerif12pt7b, 2, COLOR_RED, COLOR_YELLOW);
-    areaConfigs[STOVE] = AreaConfig(&fonts::DejaVu18, 2, COLOR_BLUE, COLOR_YELLOW);
-    areaConfigs[STATUS_AREA] = AreaConfig(&fonts::Font2, 1, COLOR_MAGENTA, COLOR_BLACK);
+    areaConfigs[TEMP] = AreaConfig(&fonts::FreeSerif12pt7b, 2,  COLOR_BLACK, COLOR_YELLOW);
+    areaConfigs[STOVE] = AreaConfig(&fonts::DejaVu18, 2,  COLOR_BLACK, COLOR_YELLOW);
+    areaConfigs[STATUS_AREA] = AreaConfig(&fonts::Font2, 1, COLOR_BLACK, COLOR_YELLOW);
 }
 
 void Display::setup()

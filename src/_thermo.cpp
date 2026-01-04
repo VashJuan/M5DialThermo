@@ -94,12 +94,12 @@ int updateTime()
     
     // Check if we have a valid time or if RTC is still initializing
     if (formattedTime.startsWith("RTC not") || formattedTime.startsWith("Time unavailable")) {
-        display.showText(TIME, "Initializing clock...", COLOR_WHITE);
+        display.showText(TIME, "Initializing clock...");
         
         // Show error message but don't attempt WiFi reconnection to prevent watchdog timeout
         static bool errorMessageShown = false;
         if (!errorMessageShown) {
-            display.showText(STATUS_AREA, "Clock not synced - restart device", COLOR_RED);
+            display.showText(STATUS_AREA, "Clock not synced - restart device");
             errorMessageShown = true;
         }
         
@@ -124,12 +124,12 @@ float updateTemperature()
     if (!tempSensor.isValidReading(temperature))
     {
         Serial.println("Invalid temperature reading");
-        display.showText(STATUS_AREA, "Temperature Sensor Error", COLOR_RED);
+        display.showText(STATUS_AREA, "Temperature Sensor Error");
         return 999.0;
     }
 
     // Serial.printf("Temperature: %.2f°F\n", temperature);
-    display.showText(TEMP, String(temperature, 1) + " F", COLOR_WHITE);
+    display.showText(TEMP, String(temperature, 1) + " F");
 
     return temperature;
 }
@@ -144,8 +144,26 @@ float getCachedTemperature()
     }
     
     // Display cached temperature
-    display.showText(TEMP, String(temperature, 1) + " F (cached)", COLOR_WHITE);
+    display.showText(TEMP, String(temperature, 1) + " F (cached)");
     return temperature;
+}
+
+// Translate LoRa responses to human-readable messages
+String translateLoRaStatus(const String& loraResponse) {
+    if (loraResponse == "STOVE_OFF_ACK") {
+        return "Stove off \u263A"; // ☺
+    } else if (loraResponse == "STOVE_ON_ACK") {
+        return "Stove on \u263A"; // ☺
+    } else if (loraResponse == "TIMEOUT" || loraResponse.length() == 0) {
+        return "No response \u2639"; // ☹
+    } else if (loraResponse.startsWith("TIMEOUT") || loraResponse.indexOf("Failed") >= 0) {
+        return "Error \u2639"; // ☹
+    } else if (loraResponse == "No transmitter") {
+        return "LoRa disabled";
+    } else {
+        // For other responses, show a shortened version
+        return "OK \u263A"; // ☺
+    }
 }
 
 bool updateStove(float temperature, int hourOfWeek, bool manualToggleRequested = false)
@@ -162,16 +180,15 @@ bool updateStove(float temperature, int hourOfWeek, bool manualToggleRequested =
             M5.Speaker.tone(4000, 100);
         }
 
-        statusText = statusText;
+        // Manual toggle - show the manual state in STOVE area
         display.showText(STOVE, statusText);
     }
     else
     {
-        // Run automatic temperature control logic which returns display text
-        String statusText = stove.update(temperature, hourOfWeek);
+        // Run automatic temperature control logic (don't use return value for display)
+        stove.update(temperature, hourOfWeek);
         
-        // Display the status text returned by stove (includes LoRa status)
-        display.showText(STOVE, statusText);
+        // Display is handled separately in the periodic update blocks below
     }
 
     return (stove.getState() == STOVE_ON);
@@ -215,7 +232,7 @@ void setup()
     if (!tempSensor.setup())
     {
         Serial.println("Failed to initialize temperature sensor!\n");
-        display.showText(STATUS_AREA, "Temp Sensor Init Failed.", COLOR_RED);
+        display.showText(STATUS_AREA, "Temp Sensor Init Failed.");
         // Don't block - continue with other setup
     }
     else
@@ -251,15 +268,15 @@ void setup()
         String modeStr = (currentMode == LoRaCommunicationMode::P2P) ? "P2P" : "LoRaWAN";
         
         Serial.printf("LoRa transmitter initialized successfully in %s mode\n", modeStr.c_str());
-        display.showText(STATUS_AREA, "LoRa ready: " + modeStr, COLOR_GREEN);
+        display.showText(STATUS_AREA, "LoRa ready: " + modeStr);
     } else {
         Serial.println("LoRa transmitter initialization failed - continuing without LoRa");
-        display.showText(STATUS_AREA, "LoRa failed - local mode only", COLOR_YELLOW);
+        display.showText(STATUS_AREA, "LoRa failed - local mode only");
     }
     delay(1000); // Show LoRa status for a moment
 
     // Clear setup message and show ready status
-    display.showText(STATUS_AREA, "System Ready", COLOR_MAGENTA);
+    display.showText(STATUS_AREA, "System Ready");
     delay(500); // Brief pause to show ready message
     
     String now = rtc.getFormattedDate();
@@ -378,18 +395,30 @@ void loop()
         
         // Update displays immediately when temperature is polled
         if (timeForTempPoll) {
-            // Show stove state
+            // Show current temperature
+            display.showText(TEMP, String(curTemp, 1) + "F");
+            
+            // Show target temp and diff in STOVE area
+            float targetTemp = stove.getCurrentDesiredTemperature();
+            float tempDiff = targetTemp - curTemp;
             String stoveState = stove.getStateString();
+            
             if (stoveState.startsWith("PENDING")) {
                 display.showText(STOVE, stoveState);
             } else {
-                display.showText(STOVE, (stove.getState() == STOVE_ON) ? "ON" : "OFF");
+                String stoveDisplay = String(targetTemp, 1) + "F (" + String(tempDiff, 1) + "F)";
+                display.showText(STOVE, stoveDisplay);
             }
             
-            // Show LoRa status in STATUS_AREA
+            // Show LoRa/networking status in STATUS_AREA
             String loraStatus = stove.getLastLoRaResponse();
-            if (loraStatus.length() > 0) {
-                display.showText(STATUS_AREA, "LoRa: " + loraStatus, COLOR_BLUE);
+            if (loraStatus.length() > 0 && loraStatus != "No transmitter") {
+                String humanStatus = translateLoRaStatus(loraStatus);
+                display.showText(STATUS_AREA, humanStatus);
+            } else if (stove.isLoRaControlEnabled()) {
+                display.showText(STATUS_AREA, "LoRa: Ready");
+            } else {
+                display.showText(STATUS_AREA, "Local mode");
             }
         }
     }
@@ -400,25 +429,39 @@ void loop()
     static unsigned long loopCounterForDisplay = 0;
     
     if (millis() - lastDisplayUpdate > (isInactive ? 10000 : 2000)) { // Update less frequently when inactive
-        String currentState = stove.getStateString();
-        if (currentState.startsWith("PENDING")) {
-            display.showText(STOVE,  currentState);
-        } else if (!timeForTempPoll) {
-            // Update stove status even when not polling temp, but less frequently
-            display.showText(STOVE, (stove.getState() == STOVE_ON) ? "ON" : "OFF");
-        }
-        
-        // Update LoRa status if available
-        String loraStatus = stove.getLastLoRaResponse();
-        if (loraStatus.length() > 0 && loraStatus != "No transmitter") {
-            display.showText(STATUS_AREA, "LoRa: " + loraStatus, COLOR_BLUE);
-        }
-
-        
         // Update temperature display
         float displayTemp = isInactive ? tempSensor.getLastTemperatureF() : curTemp;
         if (!isnan(displayTemp) && tempSensor.isValidReading(displayTemp)) {
-            display.showText(TEMP, String(displayTemp, 1) + "F", COLOR_WHITE);
+            display.showText(TEMP, String(displayTemp, 1) + "F");
+        }
+        
+        // Update stove area with target temp and diff
+        String currentState = stove.getStateString();
+        if (currentState.startsWith("PENDING")) {
+            display.showText(STOVE, currentState);
+        } else if (!isnan(displayTemp) && tempSensor.isValidReading(displayTemp)) {
+            float targetTemp = stove.getCurrentDesiredTemperature();
+            float tempDiff = targetTemp - displayTemp;
+            String stoveDisplay = String(targetTemp, 1) + "F (" + String(tempDiff, 1) + "F)";
+            display.showText(STOVE, stoveDisplay);
+        }
+        
+        // Update LoRa/networking status in STATUS_AREA
+        String loraStatus = stove.getLastLoRaResponse();
+        if (loraStatus.length() > 0 && loraStatus != "No transmitter") {
+            String humanStatus = translateLoRaStatus(loraStatus);
+            if (isInactive) {
+                humanStatus += " (save)";
+            }
+            display.showText(STATUS_AREA, humanStatus);
+        } else if (stove.isLoRaControlEnabled()) {
+            String statusMsg = "LoRa: Ready";
+            if (isInactive) {
+                statusMsg += " (save)";
+            }
+            display.showText(STATUS_AREA, statusMsg);
+        } else {
+            display.showText(STATUS_AREA, "Local mode");
         }
         
         lastDisplayUpdate = millis();
