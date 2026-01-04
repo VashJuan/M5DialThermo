@@ -389,7 +389,7 @@ bool LoRaReceiver::sendP2PMessage(const String &message)
         return false;
     }
     
-    Serial.printf("P2P message sent: %s (hex: %s)\n", message.c_str(), hexMessage.c_str());
+    Serial.printf("P2P TX: %s\n", message.c_str());
     return true;
 }
 
@@ -421,8 +421,7 @@ String LoRaReceiver::receiveP2PMessage(int timeout)
         if (startQuote >= 0 && endQuote >= 0) {
             String hexData = response.substring(startQuote + 1, endQuote);
             String decodedMessage = ProtocolHelper::hexToAscii(hexData);
-            Serial.printf("P2P message received: %s (hex: %s)\n", 
-                        decodedMessage.c_str(), hexData.c_str());
+            Serial.printf("P2P RX: %s\n", decodedMessage.c_str());
             quietLogCounter = 0; // Reset counter on activity
             return decodedMessage;
         }

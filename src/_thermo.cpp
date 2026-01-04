@@ -376,10 +376,21 @@ void loop()
     if (tempSensor.isValidReading(curTemp)) {
         stoveOn = updateStove(curTemp, hourOfWeek);
         
-        // Update stove display immediately when temperature is polled
+        // Update displays immediately when temperature is polled
         if (timeForTempPoll) {
-            String stoveStatus =  stove.getDisplayStatusText();
-            display.showText(STOVE, stoveStatus);
+            // Show stove state
+            String stoveState = stove.getStateString();
+            if (stoveState.startsWith("PENDING")) {
+                display.showText(STOVE, stoveState);
+            } else {
+                display.showText(STOVE, (stove.getState() == STOVE_ON) ? "ON" : "OFF");
+            }
+            
+            // Show LoRa status in STATUS_AREA
+            String loraStatus = stove.getLastLoRaResponse();
+            if (loraStatus.length() > 0) {
+                display.showText(STATUS_AREA, "LoRa: " + loraStatus, COLOR_BLUE);
+            }
         }
     }
 
@@ -394,32 +405,20 @@ void loop()
             display.showText(STOVE,  currentState);
         } else if (!timeForTempPoll) {
             // Update stove status even when not polling temp, but less frequently
-            String stoveStatus =  stove.getDisplayStatusText();
-            display.showText(STOVE, stoveStatus);
+            display.showText(STOVE, (stove.getState() == STOVE_ON) ? "ON" : "OFF");
         }
         
-        // Show detailed status with cached temperature during inactive periods
-        if (!(loopCounterForDisplay++ % 25)) {
-            float displayTemp = isInactive ? tempSensor.getLastTemperatureF() : curTemp;
-            if (!isnan(displayTemp) && tempSensor.isValidReading(displayTemp)) {
-                float desiredTemp = stove.getCurrentDesiredTemperature();
-                float tempDiff = desiredTemp - displayTemp;
-                String statusMsg = String(desiredTemp, 1) + "F goal, " + String(tempDiff, 1) + "F off";
-                if (isInactive) {
-                    statusMsg += " (power save)";
-                }
-                display.showText(STATUS_AREA, statusMsg, isInactive ? COLOR_GRAY : COLOR_BLACK);
-            }
+        // Update LoRa status if available
+        String loraStatus = stove.getLastLoRaResponse();
+        if (loraStatus.length() > 0 && loraStatus != "No transmitter") {
+            display.showText(STATUS_AREA, "LoRa: " + loraStatus, COLOR_BLUE);
         }
+
         
-        // Update cached temperature display during inactive periods
-        if (isInactive && !isnan(tempSensor.getLastTemperatureF())) {
-            unsigned long timeSinceReading = (currentTime - tempSensor.getLastReadTime()) / 1000; // seconds
-            String tempStr = String(tempSensor.getLastTemperatureF(), 1) + " F";
-            if (timeSinceReading > 60) {
-                tempStr += " (" + String(timeSinceReading / 60) + "m ago)";
-            }
-            display.showText(TEMP, tempStr, COLOR_WHITE);
+        // Update temperature display
+        float displayTemp = isInactive ? tempSensor.getLastTemperatureF() : curTemp;
+        if (!isnan(displayTemp) && tempSensor.isValidReading(displayTemp)) {
+            display.showText(TEMP, String(displayTemp, 1) + "F", COLOR_WHITE);
         }
         
         lastDisplayUpdate = millis();

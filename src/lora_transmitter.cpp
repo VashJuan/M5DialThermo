@@ -413,8 +413,7 @@ String LoRaTransmitter::receiveP2PMessage(int timeout)
         if (startQuote >= 0 && endQuote >= 0) {
             String hexData = response.substring(startQuote + 1, endQuote);
             String decodedMessage = ProtocolHelper::hexToAscii(hexData);
-            Serial.printf("P2P message received: %s (hex: %s)\n", 
-                        decodedMessage.c_str(), hexData.c_str());
+            Serial.printf("P2P RX: %s\n", decodedMessage.c_str());
             return decodedMessage;
         }
     }
@@ -435,11 +434,6 @@ String LoRaTransmitter::sendCommand(const String &command, uint8_t port, bool co
         Serial.println(lastError);
         return "";
     }
-    
-    Serial.printf("Sending command: %s (mode: %s, port: %d, confirmed: %s)\n", 
-                  command.c_str(), 
-                  currentMode == LoRaCommunicationMode::P2P ? "P2P" : "LoRaWAN",
-                  port, confirmed ? "yes" : "no");
     
     // Validate command
     if (!ProtocolHelper::isValidCommand(command)) {
@@ -1014,8 +1008,6 @@ String LoRaTransmitter::sendCommandWithFallback(const String &command, int maxRe
         Serial.println(lastError);
         return "";
     }
-    
-    Serial.printf("Sending command with fallback: %s\n", command.c_str());
     
     // Try current mode first
     String response = sendCommand(command, LORAWAN_PORT_CONTROL, true, maxRetries);

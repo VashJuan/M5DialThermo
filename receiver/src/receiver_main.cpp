@@ -162,7 +162,6 @@ void loop() {
             // Send back current status with ACK in one message
             String status = stoveRelay.isOn() ? "STOVE_ON_ACK" : "STOVE_OFF_ACK";
             loraReceiver.sendResponse(status);
-            Serial.printf("Status response sent: %s\n", status.c_str());
             commandSuccess = true;
             // Don't send separate ACK for status requests - status response includes ACK
             
