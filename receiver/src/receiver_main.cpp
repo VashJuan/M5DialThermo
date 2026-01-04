@@ -41,8 +41,8 @@
 const int STOVE_CONTROL_PIN = 10;    // Output to gas stove control (GPIO10)
 const int STATUS_LED_PIN = 9;        // Status LED (optional) (GPIO9)
 // Use GPIO43 (TX) and GPIO44 (RX) - these are hardware UART pins on XIAO ESP32S3
-const int LORA_RX_PIN = 44;         // Grove-Wio-E5 TX -> ESP32 RX (GPIO44/D6)
-const int LORA_TX_PIN = 43;         // Grove-Wio-E5 RX -> ESP32 TX (GPIO43/D7)
+const int LORA_RX_PIN = 44;         // Grove-Wio-E5 TX -> ESP32 RX (GPIO44/D7)
+const int LORA_TX_PIN = 43;         // Grove-Wio-E5 RX -> ESP32 TX (GPIO43/D6)
 
 // Safety timeout - turn off stove if no signal received (in milliseconds)
 const unsigned long SAFETY_TIMEOUT = 10 * 60 * 1000; // 10 minutes

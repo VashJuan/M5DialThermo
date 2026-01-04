@@ -51,8 +51,12 @@ bool LoRaReceiver::setup(int rxPin, int txPin) {
     loraSerial->begin(LORA_FIXED_BAUD_RATE, SERIAL_8N1, rxPin, txPin);
     
     // Give module MUCH more time to fully boot - some modules need 5+ seconds
+    // Break up delay with watchdog resets to prevent timeout
     Serial.println("Waiting for module to fully boot (5 seconds)...");
-    delay(5000);
+    for (int i = 0; i < 10; i++) {
+        delay(500);
+        esp_task_wdt_reset();
+    }
     
     // Send multiple wake-up commands to ensure module is responsive
     Serial.println("Sending wake-up sequence...");
@@ -71,6 +75,15 @@ bool LoRaReceiver::setup(int rxPin, int txPin) {
         Serial.printf("Connection attempt %d (elapsed: %lu ms)...\n", 
                      attempt, millis() - initStartTime);
         esp_task_wdt_reset(); // Reset watchdog during attempts
+        
+        // Send wake-up bytes in case module is in low-power auto mode
+        // Based on andresoliva/LoRa-E5 library wake-up sequence
+        clearSerialBuffer();
+        loraSerial->write(0xFF);
+        loraSerial->write(0xFF);
+        loraSerial->write(0xFF);
+        loraSerial->write(0xFF);
+        delay(100);
         
         // Send wake-up sequence - send a blank line first to clear any buffer
         clearSerialBuffer();

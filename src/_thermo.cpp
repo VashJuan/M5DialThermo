@@ -59,9 +59,9 @@ void setupLoRaConfig() {
     loraConfig.transmitPower = 14;
 }
 
-// LoRa module pins (adjust as needed for your setup)
-const int LORA_RX_PIN = 44;  // M5Dial → Grove-Wio-E5 TX
-const int LORA_TX_PIN = 43;  // M5Dial ← Grove-Wio-E5 RX
+// LoRa module pins for M5Dial Port B (Grove connector: GND, 5V, Out(G2), In(G1))
+const int LORA_RX_PIN = 1;  // M5Dial Port B GPIO1 (IN) ← Grove-Wio-E5 TX
+const int LORA_TX_PIN = 2;  // M5Dial Port B GPIO2 (OUT) → Grove-Wio-E5 RX
 
 // Activity tracking variables
 static uint32_t lastActivityTime = millis();
