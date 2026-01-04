@@ -225,7 +225,8 @@ bool LoRaTransmitter::configureP2P()
                            String(P2P_PREAMBLE_LENGTH) + "," +
                            String(P2P_POWER);
     
-    if (!sendATCommand(rfConfigCommand, "OK")) {
+    // Success response is "+TEST: RFCFG ...", not "OK"
+    if (!sendATCommand(rfConfigCommand, "RFCFG")) {
         Serial.println("Failed to configure P2P RF parameters");
         return false;
     }
@@ -251,8 +252,9 @@ bool LoRaTransmitter::configureLoRaWAN()
     }
     
     // Set region
+    // Success response is "+DR: US915", not "OK"
     String regionCommand = "AT+DR=" + config.region;
-    if (!sendATCommand(regionCommand, "OK")) {
+    if (!sendATCommand(regionCommand, config.region)) {
         return false;
     }
     
