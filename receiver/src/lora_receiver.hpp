@@ -32,6 +32,10 @@ private:
     bool isInitialized;
     LoRaCommunicationMode currentMode;
 
+    // Debug logging control
+    unsigned long quietLogCounter;
+    unsigned long quietLogInterval;
+
     // AT command handling
     bool sendATCommand(const String &command, const String &expectedResponse = "OK", int timeout = 5000);
     String readResponse(int timeout = 5000);

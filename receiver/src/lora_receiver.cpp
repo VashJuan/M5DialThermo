@@ -13,7 +13,9 @@
 LoRaReceiver::LoRaReceiver() : 
     loraSerial(nullptr), 
     isInitialized(false),
-    currentMode(LoRaCommunicationMode::P2P)
+    currentMode(LoRaCommunicationMode::P2P),
+    quietLogCounter(0),
+    quietLogInterval(200)  // Log every 200th check when no messages
 {
     // Constructor
 }
@@ -394,6 +396,9 @@ bool LoRaReceiver::sendP2PMessage(const String &message)
 String LoRaReceiver::receiveP2PMessage(int timeout)
 {
     // Enter receive mode
+    quietLogCounter++;
+    bool shouldLog = (quietLogCounter % quietLogInterval == 0);
+    
     if (!sendATCommand("AT+TEST=RXLRPKT", "RX DONE", timeout)) {
         return "";
     }
@@ -414,6 +419,7 @@ String LoRaReceiver::receiveP2PMessage(int timeout)
                 String decodedMessage = ProtocolHelper::hexToAscii(hexData);
                 Serial.printf("P2P message received: %s (hex: %s)\n", 
                             decodedMessage.c_str(), hexData.c_str());
+                quietLogCounter = 0; // Reset counter on activity
                 return decodedMessage;
             }
         }
@@ -421,7 +427,10 @@ String LoRaReceiver::receiveP2PMessage(int timeout)
         delay(10);
     }
     
-    Serial.println("No P2P message received within timeout");
+    // Only log "no message" periodically to reduce spam
+    if (shouldLog) {
+        Serial.printf("No P2P message received (checked %lu times)\n", quietLogCounter);
+    }
     return "";
 }
 
@@ -545,6 +554,10 @@ bool LoRaReceiver::sendATCommand(const String& command, const String& expectedRe
         return false;
     }
     
+    // Quiet logging: only log RXLRPKT commands periodically
+    bool isRxCommand = command.startsWith("AT+TEST=RXLRPKT");
+    bool shouldLog = !isRxCommand || (quietLogCounter % quietLogInterval == 0);
+    
     // Enhanced buffer clearing - wait for buffer to settle
     clearSerialBuffer();
     delay(50); // Allow any pending data to arrive
@@ -555,7 +568,9 @@ bool LoRaReceiver::sendATCommand(const String& command, const String& expectedRe
     
     // Send command
     loraSerial->println(command);
-    Serial.printf("Sent: %s\n", command.c_str());
+    if (shouldLog) {
+        Serial.printf("Sent: %s\n", command.c_str());
+    }
     
     if (expectedResponse.length() == 0) {
         return true; // No response expected
@@ -565,7 +580,9 @@ bool LoRaReceiver::sendATCommand(const String& command, const String& expectedRe
     String response = readResponse(timeout);
     unsigned long commandTime = millis() - startTime;
     
-    Serial.printf("Received: %s (took %lu ms)\n", response.c_str(), commandTime);
+    if (shouldLog) {
+        Serial.printf("Received: %s (took %lu ms)\n", response.c_str(), commandTime);
+    }
     
     // Handle echo: module may echo the command before responding
     // Check if the expected response exists anywhere in the full response

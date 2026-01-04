@@ -259,8 +259,9 @@ bool LoRaTransmitter::configureLoRaWAN()
     }
     
     // Set data rate
+    // Success response contains "DR" confirmation, not "OK"
     String drCommand = "AT+DR=" + String(config.dataRate);
-    if (!sendATCommand(drCommand, "OK")) {
+    if (!sendATCommand(drCommand, "DR")) {
         return false;
     }
     
@@ -380,9 +381,11 @@ bool LoRaTransmitter::sendP2PMessage(const String &message)
     String hexMessage = ProtocolHelper::asciiToHex(message);
     
     // Send P2P message using AT+TEST=TXLRPKT
+    // Module first echoes command, then sends TX DONE after transmission
     String command = "AT+TEST=TXLRPKT,\"" + hexMessage + "\"";
     
-    if (!sendATCommand(command, "TX DONE", P2P_TX_TIMEOUT)) {
+    // Use extended timeout to wait for actual TX DONE response (not just echo)
+    if (!sendATCommand(command, "TX DONE", 5000)) {
         Serial.println("P2P transmission failed");
         return false;
     }
@@ -713,9 +716,10 @@ String LoRaTransmitter::readResponse(int timeout)
             // Only break if we've waited at least 500ms after last data
             unsigned long silenceTime = millis() - lastDataTime;
             if (silenceTime > 500) {
-                // If response looks incomplete (just echo with no OK), wait a bit more
-                if (response.length() <= 10 && response.indexOf("OK") < 0 && silenceTime < 1000) {
-                    // Keep waiting, might be slow response
+                // If response looks incomplete (just echo with no OK/DONE), wait longer
+                // TX DONE can take time after echo is received
+                if (response.length() <= 10 && response.indexOf("OK") < 0 && response.indexOf("DONE") < 0 && silenceTime < 2000) {
+                    // Keep waiting for TX DONE or other completion messages
                     delay(10);
                     continue;
                 }
