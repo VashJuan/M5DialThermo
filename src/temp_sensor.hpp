@@ -89,53 +89,20 @@ public:
     float readTemperatureFahrenheit();
 
     /**
-     * @brief Read temperature in Kelvin
-     * @return Temperature in Kelvin
-     */
-    float readTemperatureKelvin();
-
-    /**
      * @brief Get last cached temperature reading in Celsius (no sensor read)
      * @return Last temperature reading in Celsius
      */
-    float getLastTemperatureC() const;
-
-    /**
-     * @brief Get last cached temperature reading in Fahrenheit (no sensor read)
-     * @return Last temperature reading in Fahrenheit
-     */
-    float getLastTemperatureF() const;
-
-    /**
-     * @brief Get timestamp of last sensor reading
-     * @return Timestamp in milliseconds
-     */
-    unsigned long getLastReadTime() const;
 
     /**
      * @brief Set the sensor resolution
      * @param res New resolution setting
      */
-    void setResolution(MCP9808_Resolution res);
-
-    /**
-     * @brief Get the current sensor resolution
-     * @return Current resolution setting
-     */
-    MCP9808_Resolution getResolution() const;
 
     /**
      * @brief Get the current I2C address
      * @return Current I2C address
      */
     uint8_t getI2CAddress() const;
-
-    /**
-     * @brief Change the I2C address (requires sensor restart)
-     * @param address New I2C address (0x18-0x1F)
-     * @return true if address change successful
-     */
-    bool setI2CAddress(uint8_t address);
 
     /**
      * @brief Wake up the sensor from shutdown mode

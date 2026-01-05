@@ -37,30 +37,34 @@ wireless stove/heater control. This guide covers basic operation and features.
 
 **Using the Dial:**
 
-1. **Rotate clockwise** - Increase target temperature
-2. **Rotate counter-clockwise** - Decrease target temperature
-3. Changes apply immediately
-4. Target temperature shown on screen
+1. **Rotate clockwise** - Increase base temperature (+0.5°F per click)
+2. **Rotate counter-clockwise** - Decrease base temperature (-0.5°F per click)
+3. Changes apply immediately to the base temperature
+4. Updated target temperature shown on screen
+5. **Safety limits:** 50°F minimum, 90°F maximum
 
-**Manual Override:**
+**Temperature Display:**
 
-- Dial adjustments override scheduled temperature
-- Override remains until next schedule change
-- Schedule resumes at next time period
+- Current temperature reading
+- Target temperature (base + schedule offset)
+- Temperature difference in parentheses
+- Status area shows "Base: XX.X°F" during adjustment
 
 ### 3. Heating Control
 
 **Automatic Operation:**
 
 - System compares current vs target temperature
-- Heater turns ON when below target
-- Heater turns OFF when at or above target
+- Heater turns ON when below target (2°F threshold)
+- Heater turns OFF when at or above target (0.5°F threshold)
 - Commands sent wirelessly to receiver
 
-**Manual Control:**
+**Button Function:**
 
-- Press button to force heater ON/OFF (if implemented)
-- Safety timeout ensures heater turns OFF after 10 minutes
+- **Press center button** - Reset base temperature to initial configured value
+- Useful for quickly returning to your default temperature after adjustments
+- Display shows "Reset to XX.X°F" confirmation
+- All displays update immediately
 
 ## Receiver Status LED Codes
 
@@ -218,8 +222,8 @@ fails.
 
 **Solutions:**
 
-1. Rotate dial to wake system
-2. Press button to activate
+1. Rotate dial to wake system (adjusts temperature)
+2. Press button to reset base temperature and activate
 3. Check temperature sensor connection
 
 ### Display Issues
@@ -232,7 +236,7 @@ fails.
 
 **Solutions:**
 
-1. Interact with dial to wake display
+1. Rotate dial to wake display (adjusts base temperature)
 2. Connect to USB power
 3. Adjust brightness in settings (if available)
 

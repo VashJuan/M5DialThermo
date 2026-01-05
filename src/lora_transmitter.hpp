@@ -7,8 +7,7 @@
 
 #pragma once
 
-#include <Arduino.h>
-#include <HardwareSerial.h>
+#include <M5Unified.h>
 #include "../shared/protocol_common.hpp"
 
 // Configuration flags

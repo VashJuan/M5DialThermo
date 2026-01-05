@@ -13,8 +13,6 @@
 
 #pragma once
 
-// #include <Arduino.h>
-// #include <time.h>
 #include <M5Unified.h>
 
 #if defined(ARDUINO)
@@ -44,17 +42,6 @@ struct WiFiConfig
 {
     const char *ssid;
     const char *password;
-    /**
-     * @brief Get current hour (0-23)
-     * @return Current hour
-     */
-    int getHour();
-
-    /**
-     * @brief Get current day of week (0=Sunday, 6=Saturday)
-     * @return Day of week
-     */
-    int getDayOfWeek();
 };
 
 /**
@@ -67,17 +54,6 @@ struct NTPConfig
     const char *server1;
     const char *server2;
     const char *server3;
-    /**
-     * @brief Get current hour (0-23)
-     * @return Current hour
-     */
-    int getHour();
-
-    /**
-     * @brief Get current day of week (0=Sunday, 6=Saturday)
-     * @return Day of week
-     */
-    int getDayOfWeek();
 };
 
 /**
@@ -196,93 +172,6 @@ public:
     String getFormattedTime();
 
     /**
-     * @brief Get current time from system
-     * @return time_t Current time, or 0 if failed
-     */
-    time_t getCurrentTime();
-
-    /**
-     * @brief Set RTC date and time manually
-     * @param dateTime Date and time structure to set
-     */
-    void setDateTime(const m5::rtc_datetime_t &dateTime);
-
-    /**
-     * @brief Check if RTC is enabled
-     * @return true if RTC is enabled
-     */
-    bool isRTCEnabled();
-
-    /**
-     * @brief Set WiFi credentials
-     * @param ssid WiFi SSID
-     * @param password WiFi password
-     */
-    void setWiFiCredentials(const char *ssid, const char *password);
-
-    /**
-     * @brief Set NTP configuration
-     * @param timezone Timezone string
-     * @param server1 Primary NTP server
-     * @param server2 Secondary NTP server
-     * @param server3 Tertiary NTP server
-     */
-    void setNTPConfig(const char *timezone, const char *server1,
-                      const char *server2 = nullptr, const char *server3 = nullptr);
-
-    /**
-     * @brief Setup timezone from fallback configuration (without NTP sync)
-     * @return true if timezone was set successfully
-     */
-    bool setupWithFallbackTimezone();
-
-    /**
-     * @brief Get the current fallback timezone setting
-     * @return Current fallback timezone string
-     */
-    String getFallbackTimezone() const;
-
-    /**
-     * @brief Get the currently active timezone (fallback or configured)
-     * @return Current active timezone string
-     */
-    String getCurrentTimezone() const;
-
-    /**
-     * @brief Update the fallback timezone in temps.csv file
-     * @param newTimezone New timezone string (e.g., "UTC-8", "EST5EDT")
-     * @return true if successfully updated
-     */
-    bool updateFallbackTimezone(const String &newTimezone);
-
-    /**
-     * @brief Format date for display
-     * @param t Time structure
-     * @param includeWeekday Include weekday in format
-     * @return Formatted date string
-     */
-    String formatDate(const struct tm *t, bool includeWeekday = true);
-
-    /**
-     * @brief Format time for display
-     * @param t Time structure
-     * @return Formatted time string
-     */
-    String formatTime(const struct tm *t);
-
-    /**
-     * @brief Check if system is initialized
-     * @return true if initialized
-     */
-    bool isSystemInitialized() const;
-
-    /**
-     * @brief Force resynchronization of RTC hardware with ESP32 time
-     * @return true if synchronization successful
-     */
-    bool forceRTCSync();
-
-    /**
      * @brief Get current hour (0-23)
      * @return Current hour
      */
@@ -293,6 +182,14 @@ public:
      * @return Day of week
      */
     int getDayOfWeek();
+
+private:
+    // Private helper methods still used internally
+    time_t getCurrentTime();
+    String getCurrentTimezone() const;
+    String formatDate(const struct tm *t, bool includeWeekday = true);
+    String formatTime(const struct tm *t);
+    bool setupWithFallbackTimezone();
 };
 
 // Global instance for easy access

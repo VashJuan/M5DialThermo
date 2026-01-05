@@ -11,7 +11,6 @@
  * M5Unified: https://github.com/m5stack/M5Unified
  */
 
-
 // https://docs.m5stack.com/en/arduino/m5unified/imu_class
 
 #include <M5Unified.h>
@@ -30,39 +29,48 @@ extern RTC rtc;
 // Safety maximum temperature
 const float Stove::SAFETY_MAX_TEMP = 82.0;
 
-Stove::Stove(LoRaTransmitter* transmitter, float baseTemp) : 
-    loraTransmitter(transmitter),
-    currentState(STOVE_OFF), 
-    lastCommandedState(STOVE_OFF),
-    lastStateChange(0),
-    lastStatusUpdate(0),
-    minChangeInterval(180000), // 3 minutes delay between state changes
-    enabled(true),
-    manualOverride(false),
-    loraControlEnabled(false),
-    lastLoRaResponse(""),
-    statusDisplayText("LoRa: Not connected")
+Stove::Stove(LoRaTransmitter *transmitter, float baseTemp) : loraTransmitter(transmitter),
+                                                             currentState(STOVE_OFF),
+                                                             lastCommandedState(STOVE_OFF),
+                                                             lastStateChange(0),
+                                                             lastStatusUpdate(0),
+                                                             minChangeInterval(180000), // 3 minutes delay between state changes
+                                                             enabled(true),
+                                                             manualOverride(false),
+                                                             loraControlEnabled(false),
+                                                             lastLoRaResponse(""),
+                                                             statusDisplayText("LoRa: Not connected")
 {
     // Initialize timeOffset array with default values as fallback
-    timeOffset[0] = 0.0;   // Index 0 - unused
-    for (int i = 1; i <= 24; i++) {
-        timeOffset[i] = -5.0;  // Default fallback offset
+    timeOffset[0] = 0.0; // Index 0 - unused
+    for (int i = 1; i <= 24; i++)
+    {
+        timeOffset[i] = -5.0; // Default fallback offset
     }
-    
+
     // Try to load configuration from CSV file
     bool csvLoaded = loadConfigFromCSV();
-    
+
     // Set base temperature
-    if (baseTemp >= 0) {
+    if (baseTemp >= 0)
+    {
         // Use provided temperature
         baseTemperature = baseTemp;
-    } else if (csvLoaded) {
+    }
+    else if (csvLoaded)
+    {
         // baseTemperature was set by loadConfigFromCSV
         // No action needed
-    } else {
+    }
+    else
+    {
         // Fallback default
         baseTemperature = 68.0;
     }
+
+    // Store initial value for reset functionality
+    initialBaseTemperature = baseTemperature;
+    Serial.printf("Initial base temperature stored: %.1f°F\n", initialBaseTemperature);
 }
 
 Stove::~Stove()
@@ -74,49 +82,57 @@ bool Stove::loadConfigFromCSV()
 {
     // Try to open the temps.csv file from SPIFFS (internal flash)
     File file;
-    
+
     // Initialize SPIFFS
-    if (!SPIFFS.begin()) {
+    if (!SPIFFS.begin())
+    {
         Serial.println("Warning: Failed to mount SPIFFS filesystem");
         return false;
     }
-    
+
     // Try to open from SPIFFS
     file = SPIFFS.open("/temps.csv", "r");
-    if (!file) {
+    if (!file)
+    {
         // Try without leading slash
         file = SPIFFS.open("temps.csv", "r");
     }
-    
-    if (!file) {
+
+    if (!file)
+    {
         Serial.println("Warning: Could not open temps.csv from SPIFFS, using default values");
         return false;
     }
 
     Serial.println("Loading configuration from temps.csv");
-    
+
     String line;
     bool baseTemperatureSet = false;
-    
+
     // Initialize timeOffset array with defaults
-    timeOffset[0] = 0.0;  // Index 0 - unused
-    for (int i = 1; i <= 24; i++) {
-        timeOffset[i] = -5.0;  // Default fallback
+    timeOffset[0] = 0.0; // Index 0 - unused
+    for (int i = 1; i <= 24; i++)
+    {
+        timeOffset[i] = -5.0; // Default fallback
     }
-    
-    while (file.available()) {
+
+    while (file.available())
+    {
         line = file.readStringUntil('\n');
         line.trim();
-        
+
         // Skip comments and empty lines
-        if (line.length() == 0 || line.startsWith("#") || line.startsWith("Hour,")) {
+        if (line.length() == 0 || line.startsWith("#") || line.startsWith("Hour,"))
+        {
             continue;
         }
-        
+
         // Parse base temperature
-        if (line.startsWith("BaseTemperature,")) {
+        if (line.startsWith("BaseTemperature,"))
+        {
             int commaIndex = line.indexOf(',');
-            if (commaIndex != -1) {
+            if (commaIndex != -1)
+            {
                 String tempStr = line.substring(commaIndex + 1);
                 baseTemperature = tempStr.toFloat();
                 baseTemperatureSet = true;
@@ -124,33 +140,36 @@ bool Stove::loadConfigFromCSV()
                 continue;
             }
         }
-        
+
         // Parse hourly offsets (format: Hour,Offset,Description)
         int firstComma = line.indexOf(',');
         int secondComma = line.indexOf(',', firstComma + 1);
-        
-        if (firstComma != -1 && secondComma != -1) {
+
+        if (firstComma != -1 && secondComma != -1)
+        {
             String hourStr = line.substring(0, firstComma);
             String offsetStr = line.substring(firstComma + 1, secondComma);
-            
+
             int hour = hourStr.toInt();
             float offset = offsetStr.toFloat();
-            
-            if (hour >= 1 && hour <= 24) {
+
+            if (hour >= 1 && hour <= 24)
+            {
                 timeOffset[hour] = offset;
                 Serial.printf("Hour %d: %.1f°F offset\n", hour, offset);
             }
         }
     }
-    
+
     file.close();
-    
-    if (!baseTemperatureSet) {
+
+    if (!baseTemperatureSet)
+    {
         Serial.println("Warning: Base temperature not found in CSV, using default 68.0°F");
         baseTemperature = 68.0;
         return false;
     }
-    
+
     Serial.println("Successfully loaded temperature configuration from temps.csv");
     return true;
 }
@@ -161,24 +180,28 @@ void Stove::setup()
     lastCommandedState = STOVE_OFF;
     lastStateChange = millis();
     lastStatusUpdate = 0;
-    
-    if (loraTransmitter && loraTransmitter->isReady()) {
+
+    if (loraTransmitter && loraTransmitter->isReady())
+    {
         statusDisplayText = "LoRa: Ready";
         loraControlEnabled = true;
         Serial.println("Stove control initialized with LoRa transmitter");
-    } else {
+    }
+    else
+    {
         statusDisplayText = "LoRa: Not available";
         loraControlEnabled = false;
         Serial.println("Stove control initialized without LoRa (local mode only)");
     }
-    
+
     Serial.printf("Base temperature: %.1f°F\n", baseTemperature);
     Serial.println("Temperature schedule loaded from temps.csv (or defaults if file not found)");
 }
 
 float Stove::getTemperatureAdjustment(int hour)
 {
-    if (hour < 1 || hour > 24) {
+    if (hour < 1 || hour > 24)
+    {
         return 0.0; // No adjustment for invalid hours
     }
     return timeOffset[hour];
@@ -187,10 +210,11 @@ float Stove::getTemperatureAdjustment(int hour)
 bool Stove::canChangeState()
 {
     // For LoRa transmitter: check if LoRa is available and timing constraints
-    if (loraControlEnabled && loraTransmitter && !loraTransmitter->isReady()) {
+    if (loraControlEnabled && loraTransmitter && !loraTransmitter->isReady())
+    {
         return false;
     }
-    
+
     // Check timing constraints
     return (millis() - lastStateChange) >= minChangeInterval;
 }
@@ -198,19 +222,25 @@ bool Stove::canChangeState()
 void Stove::setRelayState(bool on)
 {
     // Send LoRa command to receiver for relay control
-    if (loraControlEnabled && loraTransmitter) {
+    if (loraControlEnabled && loraTransmitter)
+    {
         String command = on ? CMD_STOVE_ON : CMD_STOVE_OFF;
         String response = sendLoRaCommand(command);
-        
+
         // Update state based on response
-        if (response == RESP_STOVE_ON_ACK || response == RESP_STOVE_OFF_ACK) {
+        if (response == RESP_STOVE_ON_ACK || response == RESP_STOVE_OFF_ACK)
+        {
             currentState = on ? STOVE_ON : STOVE_OFF;
             lastStateChange = millis();
             Serial.printf("Relay command successful: %s\n", response.c_str());
-        } else {
+        }
+        else
+        {
             Serial.printf("Relay command failed or no response: %s\n", response.c_str());
         }
-    } else {
+    }
+    else
+    {
         // Local mode only (no LoRa) - just update state tracking
         currentState = on ? STOVE_ON : STOVE_OFF;
         lastStateChange = millis();
@@ -224,104 +254,126 @@ String Stove::update(float currentTemp, int hourOfWeek)
     static unsigned long loopCounter = 0;
 
     // If manual override is active, don't run automatic control but do update status
-    if (manualOverride) {
-        if (!(loopCounter % 500)) {
+    if (manualOverride)
+    {
+        if (!(loopCounter % 500))
+        {
             Serial.println("DEBUG: Manual override active, skipping automatic control");
         }
-        
+
         // Update display with current manual state
-        if (loraControlEnabled) {
+        if (loraControlEnabled)
+        {
             statusDisplayText = (currentState == STOVE_ON) ? "ON (Manual)" : "OFF (Manual)";
         }
-        
+
         return getDisplayStatusText();
     }
 
-    if (!enabled) {
+    if (!enabled)
+    {
         statusDisplayText = "Disabled";
         Serial.println("Stove: not enabled");
         return statusDisplayText;
     }
 
     // For LoRa control, we periodically check status and send commands
-    if (loraControlEnabled && loraTransmitter) {
+    if (loraControlEnabled && loraTransmitter)
+    {
         // Update remote status periodically
         updateRemoteStatus();
-        
-        float desiredTemp = getDesiredTemperature(rtc);   
+
+        float desiredTemp = getDesiredTemperature(rtc);
         float tempDiff = desiredTemp - currentTemp;
-        
-        if (!(loopCounter % 100)) {
-            Serial.printf("%lu) Temp: Current=%.1f°F, Target=%.1f°F, Diff=%.1f°F, State=%s\n", 
+
+        if (!(loopCounter % 100))
+        {
+            Serial.printf("%lu) Temp: Current=%.1f°F, Target=%.1f°F, Diff=%.1f°F, State=%s\n",
                           loopCounter, currentTemp, desiredTemp, tempDiff, getStateString().c_str());
         }
-        
+
         bool shouldBeOn = false;
-        
+
         // Hysteresis: different thresholds for turning on vs off to prevent oscillation
-        if (currentState == STOVE_OFF || currentState == STOVE_PENDING_OFF) {
+        if (currentState == STOVE_OFF || currentState == STOVE_PENDING_OFF)
+        {
             shouldBeOn = (tempDiff >= STOVE_HYSTERESIS_LOW);
-        } else {
+        }
+        else
+        {
             shouldBeOn = (tempDiff > STOVE_HYSTERESIS_HIGH);
         }
-        
+
         // Send command if needed and timing allows
-        if (shouldBeOn && currentState == STOVE_OFF && canChangeState()) {
+        if (shouldBeOn && currentState == STOVE_OFF && canChangeState())
+        {
             status = turnOn();
-        } else if (!shouldBeOn && currentState == STOVE_ON && canChangeState()) {
+        }
+        else if (!shouldBeOn && currentState == STOVE_ON && canChangeState())
+        {
             status = turnOff();
         }
-        
+
         // Update display text with temperature info
-        if (currentState == STOVE_PENDING_ON || currentState == STOVE_PENDING_OFF) {
+        if (currentState == STOVE_PENDING_ON || currentState == STOVE_PENDING_OFF)
+        {
             unsigned long remainingSeconds = getTimeUntilNextChange();
             statusDisplayText = getStateString() + " (" + String(remainingSeconds) + "s)";
         }
-    } else {
+    }
+    else
+    {
         // No LoRa control - just show local calculation
-        float desiredTemp = getDesiredTemperature(rtc);   
+        float desiredTemp = getDesiredTemperature(rtc);
         float tempDiff = desiredTemp - currentTemp;
-        
+
         // Include temperature difference in status display for better feedback
         statusDisplayText = String(desiredTemp, 1) + "F goal;";
-        if (abs(tempDiff) > 0.1) {
+        if (abs(tempDiff) > 0.1)
+        {
             statusDisplayText += String(tempDiff > 0 ? "+" : "") + String(tempDiff, 1) + "F off";
         }
-        
-        if (!(loopCounter % 100)) {
-            Serial.printf("  Current: %.1f°F, Goal: %.1f°F, Delta: %.1f°FΔ\n", 
+
+        if (!(loopCounter % 100))
+        {
+            Serial.printf("  Current: %.1f°F, Goal: %.1f°F, Delta: %.1f°FΔ\n",
                           currentTemp, desiredTemp, tempDiff);
         }
     }
-    
+
     loopCounter++;
     return getDisplayStatusText();
 }
 
 String Stove::turnOn()
 {
-    if (!loraControlEnabled || !loraTransmitter) {
+    if (!loraControlEnabled || !loraTransmitter)
+    {
         statusDisplayText = "LoRa: Not available";
         return "LoRa not available";
     }
-    
-    if (!canChangeState() && lastCommandedState != STOVE_ON) {
+
+    if (!canChangeState() && lastCommandedState != STOVE_ON)
+    {
         unsigned long remainingSeconds = getTimeUntilNextChange();
         statusDisplayText = "Wait " + String(remainingSeconds) + "s";
         return statusDisplayText;
     }
-    
+
     statusDisplayText = "Sending ON command...";
     String response = sendLoRaCommand(CMD_STOVE_ON);
-    
-    if (response == RESP_STOVE_ON) {
+
+    if (response == RESP_STOVE_ON)
+    {
         currentState = STOVE_ON;
         lastCommandedState = STOVE_ON;
         lastStateChange = millis();
         statusDisplayText = "ON (LoRa)";
         Serial.println("Stove: Remote turned ON");
         return "Remote turned ON";
-    } else {
+    }
+    else
+    {
         statusDisplayText = "ON Failed: " + response;
         Serial.println("Stove: Failed to turn ON - " + response);
         return "Failed: " + response;
@@ -330,28 +382,33 @@ String Stove::turnOn()
 
 String Stove::turnOff()
 {
-    if (!loraControlEnabled || !loraTransmitter) {
+    if (!loraControlEnabled || !loraTransmitter)
+    {
         statusDisplayText = "LoRa: Not available";
         return "LoRa not available";
     }
-    
-    if (!canChangeState() && lastCommandedState != STOVE_OFF) {
+
+    if (!canChangeState() && lastCommandedState != STOVE_OFF)
+    {
         unsigned long remainingSeconds = getTimeUntilNextChange();
         statusDisplayText = "Wait " + String(remainingSeconds) + "s";
         return statusDisplayText;
     }
-    
+
     statusDisplayText = "Sending OFF command...";
     String response = sendLoRaCommand(CMD_STOVE_OFF);
-    
-    if (response == RESP_STOVE_OFF) {
+
+    if (response == RESP_STOVE_OFF)
+    {
         currentState = STOVE_OFF;
         lastCommandedState = STOVE_OFF;
         lastStateChange = millis();
         statusDisplayText = "OFF (LoRa)";
         Serial.println("Stove: Remote turned OFF");
         return "Remote turned OFF";
-    } else {
+    }
+    else
+    {
         statusDisplayText = "OFF Failed: " + response;
         Serial.println("Failed to turn OFF - " + response);
         return "Failed: " + response;
@@ -377,6 +434,18 @@ float Stove::getCurrentDesiredTemperature()
 
 void Stove::setBaseTemperature(float temp)
 {
+    // Enforce safety limits
+    if (temp > 90.0)
+    {
+        temp = 90.0;
+        Serial.println("Warning: Base temperature capped at 90°F safety limit");
+    }
+    else if (temp < 50.0)
+    {
+        temp = 50.0;
+        Serial.println("Warning: Base temperature must be at least 50°F");
+    }
+
     baseTemperature = temp;
     Serial.printf("Base temperature set to %.1f°F\n", baseTemperature);
 }
@@ -386,12 +455,21 @@ float Stove::getBaseTemperature() const
     return baseTemperature;
 }
 
+String Stove::resetBaseTemperature()
+{
+    float oldBase = baseTemperature;
+    baseTemperature = initialBaseTemperature;
+    Serial.printf("Base temperature reset: %.1f°F → %.1f°F\n", oldBase, baseTemperature);
+    return "Reset to " + String(baseTemperature, 1) + "°F";
+}
+
 void Stove::setEnabled(bool enable)
 {
     enabled = enable;
     Serial.printf("Automatic control %s\n", enable ? "ENABLED" : "DISABLED");
-    
-    if (!enable && (currentState == STOVE_ON)) {
+
+    if (!enable && (currentState == STOVE_ON))
+    {
         // Turn off stove when disabling automatic control
         forceState(false);
     }
@@ -405,7 +483,8 @@ bool Stove::isEnabled() const
 unsigned long Stove::getTimeUntilNextChange() const
 {
     unsigned long elapsed = millis() - lastStateChange;
-    if (elapsed >= minChangeInterval) {
+    if (elapsed >= minChangeInterval)
+    {
         return 0;
     }
     return (minChangeInterval - elapsed) / 1000; // Return in seconds
@@ -413,40 +492,52 @@ unsigned long Stove::getTimeUntilNextChange() const
 
 String Stove::getStateString() const
 {
-    switch (currentState) {
-        case STOVE_OFF:         return "OFF";
-        case STOVE_ON:          return "ON";
-        case STOVE_PENDING_ON:  {
-            unsigned long remainingSeconds = getTimeUntilNextChange();
-            return "ON in " + String(remainingSeconds) + "s";
-        }
-        case STOVE_PENDING_OFF: {
-            unsigned long remainingSeconds = getTimeUntilNextChange();
-            return "OFF in " + String(remainingSeconds) + "s";
-        }
-        default:                return "UNKNOWN";
+    switch (currentState)
+    {
+    case STOVE_OFF:
+        return "OFF";
+    case STOVE_ON:
+        return "ON";
+    case STOVE_PENDING_ON:
+    {
+        unsigned long remainingSeconds = getTimeUntilNextChange();
+        return "ON in " + String(remainingSeconds) + "s";
+    }
+    case STOVE_PENDING_OFF:
+    {
+        unsigned long remainingSeconds = getTimeUntilNextChange();
+        return "OFF in " + String(remainingSeconds) + "s";
+    }
+    default:
+        return "UNKNOWN";
     }
 }
 
 void Stove::forceState(bool on)
 {
     Serial.printf("Stove: FORCE state to %s\n", on ? "ON" : "OFF");
-    
-    if (loraControlEnabled && loraTransmitter) {
+
+    if (loraControlEnabled && loraTransmitter)
+    {
         // Send LoRa command to receiver
         String command = on ? CMD_STOVE_ON : CMD_STOVE_OFF;
         String response = sendLoRaCommand(command);
-        
+
         // Update state regardless of response for forced commands
         currentState = on ? STOVE_ON : STOVE_OFF;
         lastStateChange = millis();
-        
-        if (response == RESP_STOVE_ON_ACK || response == RESP_STOVE_OFF_ACK) {
+
+        if (response == RESP_STOVE_ON_ACK || response == RESP_STOVE_OFF_ACK)
+        {
             Serial.printf("Force command successful: %s\n", response.c_str());
-        } else {
+        }
+        else
+        {
             Serial.printf("Force command sent but no confirmation: %s\n", response.c_str());
         }
-    } else {
+    }
+    else
+    {
         // Local mode only (no LoRa) - just update state tracking
         currentState = on ? STOVE_ON : STOVE_OFF;
         lastStateChange = millis();
@@ -456,19 +547,25 @@ void Stove::forceState(bool on)
 
 String Stove::toggleManualOverride(float currentTemp)
 {
-    if (!manualOverride) {
+    if (!manualOverride)
+    {
         // Turning ON: check safety temperature limit
-        if (currentTemp <= SAFETY_MAX_TEMP) {
+        if (currentTemp <= SAFETY_MAX_TEMP)
+        {
             manualOverride = true;
             forceState(true);
             Serial.println("Manual stove override ON");
             return "MANUAL ON";
-        } else {
-            Serial.printf("Safety: Cannot turn on stove - temperature %.1f°F exceeds safety limit of %.1f°F\n", 
-                         currentTemp, SAFETY_MAX_TEMP);
+        }
+        else
+        {
+            Serial.printf("Safety: Cannot turn on stove - temperature %.1f°F exceeds safety limit of %.1f°F\n",
+                          currentTemp, SAFETY_MAX_TEMP);
             return "OFF (Safety)";
         }
-    } else {
+    }
+    else
+    {
         // Turning OFF
         manualOverride = false;
         forceState(false);
@@ -484,14 +581,20 @@ bool Stove::isManualOverride() const
 
 String Stove::getStatus(float currentTemp, int hourOfWeek)
 {
-    if (manualOverride) {
+    if (manualOverride)
+    {
         return "MANUAL ON";
-    } else {
+    }
+    else
+    {
         // Use existing update logic but just return status
         String autoStatus = update(currentTemp, hourOfWeek);
-        if (autoStatus == "ON") {
+        if (autoStatus == "ON")
+        {
             return "AUTO ON";
-        } else {
+        }
+        else
+        {
             return "OFF";
         }
     }
@@ -499,7 +602,8 @@ String Stove::getStatus(float currentTemp, int hourOfWeek)
 
 void Stove::clearManualOverride()
 {
-    if (manualOverride) {
+    if (manualOverride)
+    {
         manualOverride = false;
         Serial.println("Manual override cleared - returning to automatic mode");
         // Don't immediately change state, let automatic control take over on next update
@@ -510,60 +614,71 @@ void Stove::setLoRaControlEnabled(bool enable)
 {
     loraControlEnabled = enable;
     Serial.printf("Stove: LoRa remote control %s\n", enable ? "ENABLED" : "DISABLED");
-    
-    if (enable && loraTransmitter && loraTransmitter->isReady()) {
+
+    if (enable && loraTransmitter && loraTransmitter->isReady())
+    {
         statusDisplayText = "LoRa: Ready";
-    } else if (enable) {
+    }
+    else if (enable)
+    {
         statusDisplayText = "LoRa: Not available";
-    } else {
+    }
+    else
+    {
         statusDisplayText = "LoRa: Disabled";
     }
 }
 
-void Stove::setLoRaTransmitter(LoRaTransmitter* transmitter)
+void Stove::setLoRaTransmitter(LoRaTransmitter *transmitter)
 {
     loraTransmitter = transmitter;
-    
-    if (transmitter && transmitter->isReady()) {
+
+    if (transmitter && transmitter->isReady())
+    {
         statusDisplayText = "LoRa: Connected";
         Serial.println("LoRa transmitter connected and ready");
-    } else {
+    }
+    else
+    {
         statusDisplayText = "LoRa: Not available";
         Serial.println("LoRa transmitter not available");
     }
 }
 
-String Stove::sendLoRaCommand(const String& command)
+String Stove::sendLoRaCommand(const String &command)
 {
-    if (!loraTransmitter) {
+    if (!loraTransmitter)
+    {
         lastLoRaResponse = "No transmitter";
         statusDisplayText = "LoRa: No transmitter";
         return lastLoRaResponse;
     }
-    
-    if (!loraTransmitter->isReady()) {
+
+    if (!loraTransmitter->isReady())
+    {
         lastLoRaResponse = "Transmitter not ready";
         statusDisplayText = "LoRa: Not ready";
         return lastLoRaResponse;
     }
-    
+
     Serial.printf("Sending LoRa command: %s\n", command.c_str());
-    
+
     // Show current mode in status
     LoRaCommunicationMode currentMode = loraTransmitter->getCurrentMode();
     String modeStr = (currentMode == LoRaCommunicationMode::P2P) ? "P2P" : "LoRaWAN";
     statusDisplayText = "Sending (" + modeStr + "): " + command;
-    
+
     // Use fallback method for better reliability
     String response = loraTransmitter->sendCommandWithFallback(command, 2);
     lastLoRaResponse = response;
     lastStatusUpdate = millis();
-    
-    if (response.length() == 0) {
+
+    if (response.length() == 0)
+    {
         statusDisplayText = "LoRa: No response";
         return "TIMEOUT";
     }
-    
+
     // Update status with response and current mode
     statusDisplayText = modeStr + ": " + response;
     return response;
@@ -571,29 +686,38 @@ String Stove::sendLoRaCommand(const String& command)
 
 String Stove::updateRemoteStatus()
 {
-    if (!loraControlEnabled || !loraTransmitter) {
+    if (!loraControlEnabled || !loraTransmitter)
+    {
         statusDisplayText = "LoRa: Not available";
         return statusDisplayText;
     }
-    
+
     // Only update status if it's been a while since last update
-    if (millis() - lastStatusUpdate > 30000) { // 30 seconds
+    if (millis() - lastStatusUpdate > 30000)
+    { // 30 seconds
         statusDisplayText = "Getting status...";
         String response = sendLoRaCommand(CMD_STATUS_REQUEST);
-        
-        if (response == RESP_STOVE_ON) {
+
+        if (response == RESP_STOVE_ON)
+        {
             currentState = STOVE_ON;
             statusDisplayText = "ON (Remote)";
-        } else if (response == RESP_STOVE_OFF) {
+        }
+        else if (response == RESP_STOVE_OFF)
+        {
             currentState = STOVE_OFF;
             statusDisplayText = "OFF (Remote)";
-        } else if (response == "TIMEOUT") {
+        }
+        else if (response == "TIMEOUT")
+        {
             statusDisplayText = "LoRa: No response";
-        } else {
+        }
+        else
+        {
             statusDisplayText = "LoRa: " + response;
         }
     }
-    
+
     return statusDisplayText;
 }
 
@@ -611,4 +735,3 @@ bool Stove::isLoRaControlEnabled() const
 {
     return loraControlEnabled;
 }
-

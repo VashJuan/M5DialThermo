@@ -13,7 +13,6 @@
 
 #pragma once
 
-#include <Arduino.h>
 #include "temp_sensor.hpp"
 #include "rtc.hpp"
 #include "lora_transmitter.hpp"
@@ -53,6 +52,7 @@ private:
     StoveState currentState;            // Current stove state (based on last known remote status)
     StoveState lastCommandedState;      // Last state we commanded via LoRa
     float baseTemperature;              // Base desired temperature (°F)
+    float initialBaseTemperature;       // Initial base temperature loaded from config
     unsigned long lastStateChange;      // Time of last state change command
     unsigned long lastStatusUpdate;     // Time of last status update from remote
     unsigned long minChangeInterval;    // Minimum time between state changes (3 minutes)
@@ -149,9 +149,15 @@ public:
 
     /**
      * @brief Set base temperature
-     * @param temp Base temperature in °F
+     * @param temp Base temperature in °F (limited to 50-90°F range)
      */
     void setBaseTemperature(float temp);
+
+    /**
+     * @brief Reset base temperature to initial value from construction/CSV
+     * @return Status message indicating the reset value
+     */
+    String resetBaseTemperature();
 
     /**
      * @brief Get base temperature

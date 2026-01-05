@@ -61,7 +61,9 @@ workflow
 1. Read [User Guide](USER_GUIDE.md) for operation
 2. Plug in both units (M5Dial and receiver)
 3. Watch receiver LED - should pulse then show steady patterns
-4. Dial controls temperature, system auto-controls heating
+4. **Rotate dial** to adjust base temperature (0.5°F per click, 50-90°F range)
+5. **Press button** to reset temperature to initial configured value
+6. System automatically controls heating based on temperature
 
 ### Hardware Setup
 
@@ -91,7 +93,8 @@ workflow
 **Transmitter (M5Dial):**
 
 - Temperature monitoring (MCP9808 sensor)
-- Rotary dial interface
+- Rotary dial interface (adjusts base temp in 0.5°F increments)
+- Button to reset temperature to initial value
 - Wireless LoRa transmitter
 - Battery or USB powered
 - https://shop.m5stack.com/products/m5stack-dial-esp32-s3-smart-rotary-knob-w-1-28-round-touch-screen

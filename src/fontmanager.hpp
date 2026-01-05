@@ -13,8 +13,7 @@
 
 #pragma once
 
-#include <Arduino.h>
-#include "M5GFX.h" // For lgfx font types
+#include <M5Unified.h>
 
 /**
  * @interface DeviceInterface
