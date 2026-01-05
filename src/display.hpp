@@ -31,38 +31,21 @@ enum DisplayArea
 };
 
 /**
- * @enum TextColor
- * @brief Text color options
- */
-enum TextColor
-{
-    COLOR_BLACK = 0,
-    COLOR_RED = 1,
-    COLOR_WHITE = 2,
-    COLOR_BLUE = 3,
-    COLOR_GREEN = 4,
-    COLOR_YELLOW = 5,
-    COLOR_CYAN = 6,
-    COLOR_MAGENTA = 7,
-    COLOR_GRAY = 8
-};
-
-/**
  * @struct AreaConfig
  * @brief Configuration for a display area including font, colors, and text size
  */
 struct AreaConfig
 {
-    const lgfx::IFont *font;   // Font pointer (nullptr for default font)
-    int textSize;              // Text size multiplier for non-GFX fonts
-    TextColor textColor;       // Text/foreground color
-    TextColor backgroundColor; // Background color
+    const lgfx::IFont *font;  // Font pointer (nullptr for default font)
+    int textSize;             // Text size multiplier for non-GFX fonts
+    uint32_t textColor;       // Text/foreground color (TFT_* constant)
+    uint32_t backgroundColor; // Background color (TFT_* constant)
 
     // Default constructor
-    AreaConfig() : font(nullptr), textSize(1), textColor(COLOR_BLACK), backgroundColor(COLOR_WHITE) {}
+    AreaConfig() : font(nullptr), textSize(1), textColor(TFT_BLACK), backgroundColor(TFT_WHITE) {}
 
     // Parameterized constructor
-    AreaConfig(const lgfx::IFont *f, int size, TextColor fg, TextColor bg)
+    AreaConfig(const lgfx::IFont *f, int size, uint32_t fg, uint32_t bg)
         : font(f), textSize(size), textColor(fg), backgroundColor(bg) {}
 };
 
@@ -122,13 +105,6 @@ private:
     const lgfx::IFont *getAreaFont(DisplayArea area);
 
     /**
-     * @brief Convert TextColor enum to actual color value
-     * @param color TextColor enum value
-     * @return Actual color value for the display
-     */
-    uint32_t getColorValue(TextColor color);
-
-    /**
      * @brief Clear specific area of the screen
      * @param area Display area to clear
      */
@@ -171,7 +147,7 @@ public:
      * @param color Text color (optional, uses area config if not specified)
      * @param clearFirst Whether to clear the area first (optional, defaults to true)
      */
-    void showText(DisplayArea area, const String &text, TextColor color = COLOR_BLACK, bool clearFirst = true);
+    void showText(DisplayArea area, const String &text, uint32_t color = TFT_BLACK, bool clearFirst = true);
 
     /**
      * @brief Set configuration for a specific display area
@@ -181,7 +157,7 @@ public:
      * @param textColor Text/foreground color
      * @param backgroundColor Background color
      */
-    void setAreaConfig(DisplayArea area, const lgfx::IFont *font, int textSize, TextColor textColor, TextColor backgroundColor);
+    void setAreaConfig(DisplayArea area, const lgfx::IFont *font, int textSize, uint32_t textColor, uint32_t backgroundColor);
 
     /**
      * @brief Set font for a specific display area
@@ -197,7 +173,7 @@ public:
      * @param textColor Text/foreground color
      * @param backgroundColor Background color
      */
-    void setAreaColors(DisplayArea area, TextColor textColor, TextColor backgroundColor);
+    void setAreaColors(DisplayArea area, uint32_t textColor, uint32_t backgroundColor);
 
     /**
      * @brief Get area configuration
@@ -218,7 +194,7 @@ public:
      * @param y Y coordinate
      * @param color Line color
      */
-    void drawHorizontalLine(int x1, int x2, int y, TextColor color = COLOR_BLUE);
+    void drawHorizontalLine(int x1, int x2, int y, uint32_t color = TFT_BLUE);
 
     /**
      * @brief Get display width

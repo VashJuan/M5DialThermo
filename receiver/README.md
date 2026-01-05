@@ -5,12 +5,12 @@ thermostat system.
 
 > **📚 For complete documentation**, see the main project guides:
 >
-> - [USER_GUIDE.md](../USER_GUIDE.md) - Operation and features
-> - [HARDWARE_GUIDE.md](../HARDWARE_GUIDE.md) - Pin connections and wiring
-> - [NETWORK_GUIDE.md](../NETWORK_GUIDE.md) - Communication setup and
+> - [USER_GUIDE.md](../doc/USER_GUIDE.md) - Operation and features
+> - [HARDWARE_GUIDE.md](../doc/HARDWARE_GUIDE.md) - Pin connections and wiring
+> - [NETWORK_GUIDE.md](../doc/NETWORK_GUIDE.md) - Communication setup and
 >   troubleshooting
-> - [DEVELOPER_GUIDE.md](../DEVELOPER_GUIDE.md) - Build instructions and code
->   architecture
+> - [DEVELOPER_GUIDE.md](../doc/DEVELOPER_GUIDE.md) - Build instructions and
+>   code architecture
 
 ## Quick Reference
 
@@ -43,9 +43,9 @@ for Grove-Wio-E5 module communication. This provides:
 
 **For complete details, see:**
 
-- [DEVELOPER_GUIDE.md](../DEVELOPER_GUIDE.md#lora-communication-library) -
+- [DEVELOPER_GUIDE.md](../doc/DEVELOPER_GUIDE.md#lora-communication-library) -
   Library usage and code examples
-- [HARDWARE_GUIDE.md](../HARDWARE_GUIDE.md#grove-wio-e5-power-consumption) -
+- [HARDWARE_GUIDE.md](../doc/HARDWARE_GUIDE.md#grove-wio-e5-power-consumption) -
   Power consumption and battery life
-- [NETWORK_GUIDE.md](../NETWORK_GUIDE.md) - Communication setup and
+- [NETWORK_GUIDE.md](../doc/NETWORK_GUIDE.md) - Communication setup and
   troubleshooting
