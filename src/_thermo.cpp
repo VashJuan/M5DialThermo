@@ -137,21 +137,6 @@ float updateTemperature()
     return temperature;
 }
 
-float getCachedTemperature()
-{
-    float temperature = tempSensor.getLastTemperatureF();
-
-    // If no cached reading is available, take a new reading
-    if (isnan(temperature))
-    {
-        return updateTemperature();
-    }
-
-    // Display cached temperature
-    display.showText(TEMP, String(temperature, 1) + " F (cached)");
-    return temperature;
-}
-
 // Translate LoRa responses to human-readable messages
 String translateLoRaStatus(const String &loraResponse)
 {
@@ -329,6 +314,9 @@ void handleButtonPress()
 
     Serial.println("Button pressed - resetting base temperature to initial value");
 
+    // Show immediate visual feedback
+    display.showText(STATUS_AREA, "Button pressed!");
+
     // Reset base temperature to initial loaded value
     String result = stove.resetBaseTemperature();
     Serial.println("Base temp reset result: " + result);
@@ -419,11 +407,13 @@ void loop()
 
     // Handle encoder rotation to adjust base temperature
     static long lastEncoderPosition = 0;
-    long currentEncoderPosition = M5Dial.Encoder.read();
+    long currentEncoderPosition = encoder.getPosition();
     if (currentEncoderPosition != lastEncoderPosition)
     {
         long change = currentEncoderPosition - lastEncoderPosition;
         lastEncoderPosition = currentEncoderPosition;
+        recentActivity = true;
+        lastActivityTime = currentTime; // Reset activity timer
 
         // Each encoder click adjusts base temp by 0.5°F
         float adjustment = change * 0.5;
@@ -445,14 +435,12 @@ void loop()
         stove.setBaseTemperature(newBase);
         Serial.printf("Encoder adjusted base temperature: %.1f°F (change: %+.1f°F)\n", newBase, adjustment);
 
-        // Update display immediately
+        // Update display immediately with immediate feedback
         display.showText(TEMP, String(curTemp, 1) + "F");
         float targetTemp = stove.getCurrentDesiredTemperature();
         float tempDiff = targetTemp - curTemp;
         display.showText(STOVE, String(targetTemp, 1) + "F (" + String(tempDiff, 1) + "F)");
         display.showText(STATUS_AREA, "Base: " + String(newBase, 1) + "F");
-
-        lastActivityTime = currentTime; // Reset activity timer
     }
 
     // Update stove status (handles both manual and automatic modes)
@@ -509,7 +497,7 @@ void loop()
     if (millis() - lastDisplayUpdate > (isInactive ? 10000 : 2000))
     { // Update less frequently when inactive
         // Update temperature display
-        float displayTemp = isInactive ? tempSensor.getLastTemperatureF() : curTemp;
+        float displayTemp = curTemp;
         if (!isnan(displayTemp) && tempSensor.isValidReading(displayTemp))
         {
             display.showText(TEMP, String(displayTemp, 1) + "F");
@@ -574,8 +562,7 @@ void loop()
         // Put sensor to sleep after temperature reading (if we just polled)
         if (timeForTempPoll && tempSensor.getAwakeStatus())
         {
-            tempSensor.getLastTemperatureF(); // Cache the last temperature reading
-            delay(100);                       // Allow any pending operations to complete
+            delay(100); // Allow any pending operations to complete
             tempSensor.shutdown();
             Serial.printf("Temperature sensor was shutdown at %s for 2 minutes...\n", rtc.getFormattedTime().c_str());
         }

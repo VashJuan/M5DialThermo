@@ -4,30 +4,38 @@
 Encoder encoder;
 
 // Constructor
-Encoder::Encoder() : oldPosition(0) {
+Encoder::Encoder() : oldPosition(0)
+{
     // Initialize with default position
 }
 
 // Destructor
-Encoder::~Encoder() {
+Encoder::~Encoder()
+{
     // Cleanup if needed
 }
 
-void Encoder::setup() {
-    // Initialize encoder position  
-    oldPosition = 0;
-    
-    // Note: M5Dial encoder handling will be done via interrupts
-    // The main loop will handle encoder changes through interrupt flags
+void Encoder::setup()
+{
+    // Initialize encoder position from M5's encoder
+    oldPosition = M5.Encoder.read();
+
+    Serial.println("Encoder initialized using M5Unified encoder");
 }
 
-long Encoder::getPosition() {
-    // Return simple position counter
-    return oldPosition;
+long Encoder::getPosition()
+{
+    // Read directly from M5's encoder hardware
+    return M5.Encoder.read();
 }
 
-bool Encoder::hasPositionChanged() {
-    // This will be controlled by interrupt flags in the main program
-    // For now, return false as position changes are handled elsewhere
+bool Encoder::hasPositionChanged()
+{
+    long currentPosition = M5.Encoder.read();
+    if (currentPosition != oldPosition)
+    {
+        oldPosition = currentPosition;
+        return true;
+    }
     return false;
 }
